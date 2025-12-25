@@ -13,24 +13,24 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-gray-900 text-white p-4 shadow-md">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold tracking-wider text-purple-400 hover:text-purple-300 transition">
+    <nav className="sticky top-0 z-50 bg-[#FCF5EF] text-[#0A0A0A] shadow-sm border-b border-[#0A0A0A]/5">
+      <div className="container mx-auto p-4 flex justify-between items-center">
+        <Link href="/" className="text-xl font-extrabold tracking-wider text-[#FF7B00] hover:text-[#d96900] transition">
           Project Tales
         </Link>
         <div className="space-x-4">
           {user ? (
             <>
-              <Link href="/" className="hover:text-gray-300">Dashboard</Link>
+              <Link href="/" className="hover:text-gray-600 font-medium">Dashboard</Link>
               <button 
                 onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm transition"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-600 px-3 py-1 rounded-lg text-sm transition font-medium"
               >
                 Logout
               </button>
             </>
           ) : (
-            <Link href="/login" className="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm transition">
+            <Link href="/login" className="bg-black text-[#FF7B00] hover:bg-gray-900 px-4 py-1.5 rounded-full text-sm transition font-bold shadow-sm">
               Login
             </Link>
           )}

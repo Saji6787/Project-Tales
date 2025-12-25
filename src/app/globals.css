@@ -4,6 +4,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --color-primary: #FF7B00;
+  --color-bg-custom: #FCF5EF;
+  --color-text-custom: #0A0A0A;
 }
 
 @theme inline {
@@ -11,17 +14,14 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-primary: var(--color-primary);
+  --color-bg-custom: var(--color-bg-custom);
+  --color-text-custom: var(--color-text-custom);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-bg-custom);
+  color: var(--color-text-custom);
   font-family: Arial, Helvetica, sans-serif;
 }
