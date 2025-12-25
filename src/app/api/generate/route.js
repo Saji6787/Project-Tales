@@ -39,7 +39,8 @@ export async function POST(req) {
         1. Lanjutkan cerita berdasarkan input player dan histori.
         2. Buat narasi 150-250 kata yang immersif, deskriptif, dan menarik.
         3. Di akhir, berikan TEPAT 3-5 pilihan aksi untuk player.
-        4. Format response HARUS:
+        4. PENTING: Pastikan BAHASA pada Pilihan SAMA dengan BAHASA pada Narasi Cerita. Jika cerita Bahasa Indonesia, pilihan harus Bahasa Indonesia. Jika Inggris, pilihan harus Inggris.
+        5. Format response HARUS:
            [Narasi Cerita]
            
            Pilihan:
@@ -64,16 +65,24 @@ export async function POST(req) {
     const text = response.content;
 
     // 5. Parse
-    const splitIndex = text.lastIndexOf("Pilihan:");
+    // Regex to find the separator (Pilihan:, Choices:, etc.) - Case insensitive
+    const separatorRegex = /(?:Pilihan|Choices|Options|Actions):\s*/i;
+    const match = text.match(separatorRegex);
+    
     let story = text;
     let choices = [];
 
-    if (splitIndex !== -1) {
-        story = text.substring(0, splitIndex).trim();
-        const choicesText = text.substring(splitIndex + "Pilihan:".length).trim();
-        const choiceMatches = choicesText.match(/\d+\.\s*(.+)/g);
+    if (match) {
+        // Story is everything before the match
+        story = text.substring(0, match.index).trim();
+        
+        // Choices are everything after
+        const choicesText = text.substring(match.index + match[0].length).trim();
+        
+        // Extract numbered lists (1. xxx, 2. xxx)
+        const choiceMatches = choicesText.match(/\d+[\.\)]\s*(.+)/g);
         if (choiceMatches) {
-            choices = choiceMatches.map(c => c.replace(/^\d+\.\s*/, '').trim());
+            choices = choiceMatches.map(c => c.replace(/^\d+[\.\)]\s*/, '').trim());
         }
     }
 

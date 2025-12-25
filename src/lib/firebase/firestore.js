@@ -1,5 +1,5 @@
 import { db } from "./config";
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where, orderBy, serverTimestamp, arrayUnion } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, arrayUnion } from "firebase/firestore";
 
 export const createStory = async (userId, title, initialPrompt) => {
   const colRef = collection(db, "users", userId, "stories");
@@ -33,4 +33,9 @@ export const updateStoryHistory = async (userId, storyId, newHistoryItem) => {
   await updateDoc(docRef, {
     history: arrayUnion(newHistoryItem)
   });
+};
+
+export const deleteStory = async (userId, storyId) => {
+  const docRef = doc(db, "users", userId, "stories", storyId);
+  await deleteDoc(docRef);
 };

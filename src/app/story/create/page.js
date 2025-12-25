@@ -54,7 +54,7 @@ export default function CreateStoryPage() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white p-8 md:p-10 rounded-3xl shadow-2xl border border-gray-100/50">
+      <div className="w-full max-w-7xl bg-white p-8 md:p-10 rounded-3xl shadow-2xl border border-gray-100/50">
          <Link href="/" className="inline-flex items-center text-gray-400 hover:text-[#FF7B00] mb-6 transition group">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -83,8 +83,13 @@ export default function CreateStoryPage() {
              <label className="block text-sm font-bold text-[#0A0A0A] mb-2">Initial Prompt / Premise</label>
              <textarea 
                value={prompt}
-               onChange={e => setPrompt(e.target.value)}
-               className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-gray-800 placeholder-gray-400 font-medium h-40 resize-none"
+               onChange={(e) => {
+                 setPrompt(e.target.value);
+                 e.target.style.height = 'auto';
+                 e.target.style.height = e.target.scrollHeight + 'px';
+               }}
+               style={{ minHeight: '160px' }}
+               className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-gray-800 placeholder-gray-400 font-medium resize-none overflow-hidden"
                required
                placeholder="e.g. You are a knight seeking the holy grail in a cyberpunk world..."
              />
