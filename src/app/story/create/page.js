@@ -14,6 +14,12 @@ export default function CreateStoryPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPremise, setIsGeneratingPremise] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  
+  // Assets State (Locations, Characters, Customs)
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [characters, setCharacters] = useState([]);
+  const [customs, setCustoms] = useState([]);
 
   const GENRE_LIST = [
     "Fantasy", "Sci-Fi", "Horror", "Mystery", "Romance", "Adventure", 
@@ -27,6 +33,23 @@ export default function CreateStoryPage() {
     setGenres(prev => 
       prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
     );
+  };
+
+  // Helper to manage asset lists
+  const addAsset = (setter, list) => {
+    if (list.length < 5) {
+      setter([...list, { name: "", description: "" }]);
+    }
+  };
+
+  const removeAsset = (setter, list, index) => {
+    setter(list.filter((_, i) => i !== index));
+  };
+
+  const updateAsset = (setter, list, index, field, value) => {
+    const newList = [...list];
+    newList[index][field] = value;
+    setter(newList);
   };
 
   const handleCreate = async (e) => {
@@ -51,6 +74,9 @@ export default function CreateStoryPage() {
              token, 
              initialPrompt: prompt,
              genres,
+             locations,
+             characters,
+             customs,
              history: [] 
         }),
       });
@@ -128,6 +154,59 @@ export default function CreateStoryPage() {
         setIsEnhancing(false);
     }
   };
+
+  // Render helper for asset section
+  const renderAssetSection = (title, list, setter) => (
+    <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+        <h3 className="font-bold text-gray-700 mb-3 ml-1">{title}</h3>
+        <div className="space-y-3">
+            {list.map((item, index) => (
+                <div key={index} className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="flex justify-end mb-2">
+                        <button 
+                            type="button"
+                            onClick={() => removeAsset(setter, list, index)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"
+                            title="Remove Asset"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        <input
+                            type="text"
+                            placeholder="Name"
+                            value={item.name}
+                            onChange={(e) => updateAsset(setter, list, index, 'name', e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-bold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF7B00]/10 focus:border-[#FF7B00]/50"
+                        />
+                        <textarea
+                            placeholder="Description"
+                            value={item.description}
+                            onChange={(e) => updateAsset(setter, list, index, 'description', e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF7B00]/10 focus:border-[#FF7B00]/50 resize-none h-16"
+                        />
+                    </div>
+                </div>
+            ))}
+        </div>
+        
+        {list.length < 5 && (
+            <button
+                type="button"
+                onClick={() => addAsset(setter, list)}
+                className="w-full mt-3 py-2 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold text-sm hover:border-[#FF7B00]/50 hover:text-[#FF7B00] hover:bg-[#FF7B00]/5 transition-all flex items-center justify-center gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                </svg>
+                Add More
+            </button>
+        )}
+    </div>
+  );
 
   return (
     <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4">
@@ -237,6 +316,40 @@ export default function CreateStoryPage() {
                 )}
               </div>
             </div>
+            
+            {/* Assets (Formerly Advance Settings) */}
+            <div className="border border-orange-100 rounded-2xl overflow-hidden bg-orange-50/30">
+                <button
+                    type="button"
+                    onClick={() => setIsAssetsOpen(!isAssetsOpen)}
+                    className="w-full flex justify-between items-center p-4 bg-[#FF7B00]/10 text-[#FF7B00] font-bold text-sm hover:bg-[#FF7B00]/20 transition-colors"
+                >
+                    <span>Assets (Optional)</span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2}
+                        stroke="currentColor"
+                        className={`w-5 h-5 transition-transform duration-200 ${isAssetsOpen ? 'rotate-180' : ''}`}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                </button>
+
+                <div
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                        isAssetsOpen ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0'
+                    }`}
+                >
+                    <div className="p-4 space-y-6">
+                       {renderAssetSection("Locations", locations, setLocations)}
+                       {renderAssetSection("Characters", characters, setCharacters)}
+                       {renderAssetSection("Customs", customs, setCustoms)}
+                    </div>
+                </div>
+            </div>
+
            <button 
              type="submit" 
              disabled={isGenerating}

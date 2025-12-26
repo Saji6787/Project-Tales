@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { history, initialPrompt, genres, token } = await req.json();
+    const { history, initialPrompt, genres, token, locations, characters, customs } = await req.json();
 
     // 1. Validate Auth
     let userId = null;
@@ -32,6 +32,21 @@ export async function POST(req) {
       temperature: 0.7,
     });
 
+    // Helper to format assets
+    const formatAssets = (list, title) => {
+        if (!list || list.length === 0) return "";
+        return `\n         - ${title}:\n` + list.map(item => `           * ${item.name}: ${item.description}`).join("\n");
+    };
+
+    let assetsPrompt = "";
+    if ((locations && locations.length > 0) || (characters && characters.length > 0) || (customs && customs.length > 0)) {
+        assetsPrompt = "6. Referensi Aset Dunia:" +
+            formatAssets(locations, "Lokasi") +
+            formatAssets(characters, "Karakter Penting") +
+            formatAssets(customs, "Lainnya") +
+            "\n        Gunakan referensi aset tersebut dalam narasi jika relevan.";
+    }
+
     // 3. Construct Prompt
     const messages = [
         new SystemMessage(`Anda adalah Game Master untuk roleplay cerita interaktif. 
@@ -41,7 +56,8 @@ export async function POST(req) {
         3. Di akhir, berikan TEPAT 3-5 pilihan aksi untuk player.
         4. PENTING: Narasi cerita menyesuaikan dengan bahasa input player (Indonesia/Inggris). TETAPI, Pilihan (Choices) WAJIB SELALU dalam BAHASA INGGRIS.
         5. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
-        6. Format response HARUS:
+        ${assetsPrompt}
+        Format response HARUS:
            [Narasi Cerita]
            
            Choices:
