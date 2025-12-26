@@ -304,6 +304,105 @@ export default function StoryPage() {
     return cleaned.replace(/\n/g, '\n\n');
   };
 
+  // Helper to render Choices Content (Reuse for both Mobile Inline and Desktop Sidebar)
+  const renderChoices = (isMobile) => (
+      <div className={`h-full flex flex-col ${isMobile ? 'p-0' : 'p-6 overflow-y-auto'}`}>
+          {!isMobile && (
+              <h2 className="text-xl font-bold text-white mb-6 flex items-center justify-between gap-2 whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span>Your Choice</span>
+                  {!processing && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>}
+                </div>
+                <button 
+                  onClick={handleRefreshChoices}
+                  disabled={processing || isRefreshing}
+                  className="p-2 hover:bg-white/20 rounded-full transition disabled:opacity-50"
+                  title="Refresh Choices"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                </button>
+              </h2>
+          )}
+          
+          <div className={`flex-1 ${!isMobile ? 'overflow-y-auto pr-2 custom-scrollbar' : ''} space-y-3 mb-4`}>
+          {!processing && activeChoices && activeChoices.length > 0 ? (
+              <div className="space-y-3">
+                {activeChoices.map((choice, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleChoice(cleanChoiceText(choice))}
+                    className={`w-full text-left p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 backdrop-blur-sm group/btn ${
+                        isMobile 
+                        ? 'bg-[#FF7B00] text-white shadow-lg border border-white/20' 
+                        : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className={`font-bold transition-colors ${isMobile ? 'text-white/80' : 'text-white/60 group-hover/btn:text-white'}`}>{idx + 1}.</span>
+                      <span className="font-medium text-sm md:text-base text-white">{cleanChoiceText(choice)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+          ) : (
+               !processing && (!activeChoices || activeChoices.length === 0) && (
+                 <div className={`text-center py-10 italic border rounded-xl p-4 ${isMobile ? 'text-gray-400 border-gray-200' : 'text-white/60 border-white/10'}`}>
+                   Refresh the choices
+                 </div>
+               )
+          )}
+          </div>
+
+          {/* Custom Choice Input */}
+          {!processing && (
+              <div className={`mt-auto pt-4 ${isMobile ? 'border-t border-gray-200' : 'border-t border-white/20'}`}>
+                 <label className={`block text-xs font-bold mb-2 uppercase tracking-wide ${isMobile ? 'text-gray-500' : 'text-white/70'}`}>Custom Choice</label>
+                 <div className={`flex items-end gap-2 p-2 rounded-xl border focus-within:border-opacity-100 transition-all ${
+                     isMobile 
+                     ? 'bg-white border-gray-300 focus-within:border-[#FF7B00]' 
+                     : 'bg-white/10 border-white/20 focus-within:bg-white/20 focus-within:border-white/50'
+                 }`}>
+                     <textarea
+                         value={customChoice}
+                         onChange={(e) => {
+                             setCustomChoice(e.target.value);
+                             e.target.style.height = 'auto';
+                             e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+                         }}
+                         className={`flex-1 bg-transparent text-sm font-medium focus:outline-none resize-none max-h-[100px] py-1 px-1 custom-scrollbar ${isMobile ? 'text-gray-800 placeholder-gray-400' : 'text-white placeholder-white/40'}`}
+                         placeholder="Type your own action..."
+                         rows={1}
+                         style={{ minHeight: '24px' }}
+                     />
+                     <button
+                         onClick={() => {
+                             if (customChoice.trim()) {
+                                 handleChoice(customChoice);
+                                 setCustomChoice("");
+                             }
+                         }}
+                         disabled={!customChoice.trim() || processing}
+                         className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg ${isMobile ? 'bg-[#FF7B00] text-white' : 'bg-white text-[#FF7B00] hover:bg-gray-100'}`}
+                     >
+                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                             <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                         </svg>
+                     </button>
+                 </div>
+              </div>
+          )}
+
+         {processing && (
+             <div className="flex flex-col items-center justify-center flex-1 space-y-4">
+                 <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isMobile ? 'border-[#FF7B00]' : 'border-white'}`}></div>
+                 <p className={`text-sm font-medium animate-pulse ${isMobile ? 'text-gray-500' : 'text-white/70'}`}>Generating story...</p>
+             </div>
+         )}
+      </div>
+  );
+
   return (
     // Main Container with fixed height to enable independent scrolling
     <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-[#FCF5EF]">
@@ -422,6 +521,23 @@ export default function StoryPage() {
             </div>
           ))}
 
+          {/* Mobile Choices (Inline at bottom of chat) */}
+          <div className="md:hidden mt-8 mb-4">
+              <h3 className="text-sm font-bold text-[#FF7B00] uppercase tracking-wider mb-3 flex items-center justify-between">
+                  <span>Your Turn</span>
+                  <button 
+                      onClick={handleRefreshChoices}
+                      disabled={processing || isRefreshing}
+                      className="p-1 hover:bg-orange-100 rounded-full transition disabled:opacity-50"
+                  >
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                     </svg>
+                  </button>
+              </h3>
+              {renderChoices(true)}
+          </div>
+
           {processing && (
              <div className="flex justify-start">
                <div className="bg-white border border-gray-100 p-5 rounded-2xl rounded-bl-none animate-pulse text-gray-400 text-sm">
@@ -433,15 +549,14 @@ export default function StoryPage() {
         </div>
       </div>
 
-      {/* RIGHT: Choices Sidebar */}
+      {/* RIGHT: Desktop Sidebar (Hidden on Mobile) */}
       <div 
-        className={`group
-          fixed inset-y-0 right-0 z-20 w-80 bg-[#FF7B00] shadow-2xl transition-all duration-300 ease-in-out
-          md:relative md:shadow-none
-          ${showChoices ? 'translate-x-0 md:translate-x-0 md:w-96' : 'translate-x-full md:translate-x-0 md:w-0'}
+        className={`hidden md:block 
+          relative inset-y-0 right-0 z-20 bg-[#FF7B00] shadow-none transition-all duration-300 ease-in-out
+          ${showChoices ? 'w-96 translate-x-0' : 'w-0 translate-x-0'}
         `}
       >
-          {/* Toggle Button */}
+          {/* Desktop Toggle Tab */}
           <button 
             onClick={() => setShowChoices(!showChoices)}
             className="absolute top-4 left-0 -translate-x-full bg-white text-[#FF7B00] p-2 rounded-l-md shadow-md z-30 hover:bg-gray-100 transition focus:outline-none"
@@ -460,93 +575,9 @@ export default function StoryPage() {
             )}
           </button>
 
-          {/* Sidebar Content Wrapper (Fixed width to prevent squashing during width transition) */}
-          <div className="w-80 md:w-96 h-full overflow-hidden">
-             <div className="h-full overflow-y-auto p-6 flex flex-col">
-                 <h2 className="text-xl font-bold text-white mb-6 flex items-center justify-between gap-2 whitespace-nowrap">
-                   <div className="flex items-center gap-2">
-                     <span>Your Choice</span>
-                     {!processing && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>}
-                   </div>
-                   <button 
-                     onClick={handleRefreshChoices}
-                     disabled={processing || isRefreshing}
-                     className="p-2 hover:bg-white/20 rounded-full transition disabled:opacity-50"
-                     title="Refresh Choices"
-                   >
-                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                     </svg>
-                   </button>
-                 </h2>
-                 
-                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 mb-4 custom-scrollbar">
-                 {!processing && activeChoices && activeChoices.length > 0 ? (
-                     <div className="space-y-3">
-                       {activeChoices.map((choice, idx) => (
-                         <button
-                           key={idx}
-                           onClick={() => handleChoice(cleanChoiceText(choice))}
-                           className="w-full text-left bg-white/10 hover:bg-white/20 text-white p-4 rounded-xl border border-white/20 transition-all hover:scale-[1.02] active:scale-95 backdrop-blur-sm group/btn"
-                         >
-                           <div className="flex items-start gap-3">
-                             <span className="font-bold text-white/60 group-hover/btn:text-white transition-colors">{idx + 1}.</span>
-                             <span className="font-medium text-sm md:text-base text-white">{cleanChoiceText(choice)}</span>
-                           </div>
-                         </button>
-                       ))}
-                     </div>
-                 ) : (
-                      !processing && (!activeChoices || activeChoices.length === 0) && (
-                        <div className="text-white/60 text-center py-10 italic border border-white/10 rounded-xl p-4">
-                          Refresh the choices
-                        </div>
-                      )
-                 )}
-                 </div>
-
-                 {/* Custom Choice Input */}
-                 {!processing && (
-                     <div className="mt-auto border-t border-white/20 pt-4">
-                        <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-wide">Custom Choice</label>
-                        <div className="flex items-end gap-2 bg-white/10 p-2 rounded-xl border border-white/20 focus-within:bg-white/20 focus-within:border-white/50 transition-all">
-                            <textarea
-                                value={customChoice}
-                                onChange={(e) => {
-                                    setCustomChoice(e.target.value);
-                                    e.target.style.height = 'auto';
-                                    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-                                }}
-                                className="flex-1 bg-transparent text-white placeholder-white/40 text-sm font-medium focus:outline-none resize-none max-h-[100px] py-1 px-1 custom-scrollbar"
-                                placeholder="Type your own action..."
-                                rows={1}
-                                style={{ minHeight: '24px' }}
-                            />
-                            <button
-                                onClick={() => {
-                                    if (customChoice.trim()) {
-                                        handleChoice(customChoice);
-                                        setCustomChoice("");
-                                    }
-                                }}
-                                disabled={!customChoice.trim() || processing}
-                                className="p-2 bg-white text-[#FF7B00] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition shadow-lg"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                                    <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-                                </svg>
-                            </button>
-                        </div>
-                     </div>
-                 )}
-
-                {processing && (
-                    <div className="flex flex-col items-center justify-center flex-1 text-white/70 space-y-4">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                        <p className="text-sm font-medium animate-pulse">Generating story...</p>
-                    </div>
-                )}
-             </div>
+          {/* Sidebar Content Wrapper */}
+          <div className="w-96 h-full overflow-hidden flex flex-col">
+              {renderChoices(false)}
           </div>
       </div>
     </div>

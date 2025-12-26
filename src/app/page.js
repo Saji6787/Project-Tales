@@ -71,8 +71,8 @@ export default function Dashboard() {
   return (
     <div className="container mx-auto p-4 md:p-10 pb-32">
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-extrabold tracking-tight text-[#0A0A0A]">Your Stories</h1>
-        <Link href="/story/create" className="bg-[#FF7B00] text-gray-50 px-8 py-3 rounded-2xl font-bold hover:bg-[#e06c00] transition shadow-lg hover:shadow-xl active:scale-95 transform duration-200">
+        <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-[#0A0A0A]">Your Stories</h1>
+        <Link href="/story/create" className="bg-[#FF7B00] text-gray-50 px-4 py-2 md:px-8 md:py-3 text-sm md:text-base rounded-2xl font-bold hover:bg-[#e06c00] transition shadow-lg hover:shadow-xl active:scale-95 transform duration-200">
           + New Story
         </Link>
       </div>
@@ -84,12 +84,12 @@ export default function Dashboard() {
              onClick={() => router.push(`/story/${story.id}`)}
              className="block group cursor-pointer"
           >
-            <div className="bg-[#FF7B00] h-64 p-8 rounded-[2rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-[#FF7B00] hover:border-[#e06c00] relative">
+            <div className="bg-[#FF7B00] h-52 md:h-64 p-5 md:p-8 rounded-2xl md:rounded-[2rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-[#FF7B00] hover:border-[#e06c00] relative">
               
               {/* Three Dots Button */}
               <button 
                 onClick={(e) => toggleMenu(e, story.id)}
-                className="absolute top-6 right-6 p-2 rounded-full hover:bg-black/10 text-white transition-colors z-10"
+                className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-black/10 text-white transition-colors z-10"
               >
                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM17.25 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
@@ -98,7 +98,7 @@ export default function Dashboard() {
 
               {/* Dropdown Menu */}
               {activeMenuId === story.id && (
-                  <div className="absolute top-16 right-6 bg-white rounded-xl shadow-xl py-2 w-40 z-20 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 origin-top-right border border-gray-100">
+                  <div className="absolute top-12 md:top-16 right-6 bg-white rounded-xl shadow-xl py-2 w-40 z-20 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 origin-top-right border border-gray-100">
                       <button 
                         onClick={(e) => handleDeleteClick(e, story)}
                         className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 font-bold text-sm flex items-center gap-2 transition-colors"
@@ -124,13 +124,13 @@ export default function Dashboard() {
                 </div>
 
                 {/* Title */}
-                <h2 className="text-2xl font-bold text-white mb-2 leading-tight pr-8 break-words">
+                <h2 className="text-lg md:text-2xl font-bold text-white mb-2 leading-tight pr-8 break-words">
                     {story.title || "(No Title)"}
                 </h2>
 
                 {/* Description */}
                 <div className="flex-grow overflow-hidden">
-                   <p className="text-white/90 text-sm leading-relaxed line-clamp-3 font-medium">
+                   <p className="text-white/90 text-xs md:text-sm leading-relaxed line-clamp-3 font-medium">
                     {story.initialPrompt}
                     </p>
                 </div>

@@ -26,7 +26,8 @@ export default function CreateStoryPage() {
     "Historical", "Slice of Life", "Isekai", "Psychological", "Alternate History", 
     "Superhero", "Cyberpunk", "Medieval", "Space", "Post-Apocalyptic", 
     "School", "Comedy", "Time Travel", "Military", "Grimdark", "Mecha", 
-    "Villain Protagonist"
+    "Villain Protagonist", "Anti-villain", "Regional Folklore", "Dungeon", 
+    "Biopunk", "Steampunk", "Renaissance"
   ];
 
   const toggleGenre = (genre) => {
@@ -210,7 +211,7 @@ export default function CreateStoryPage() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4">
-      <div className="w-full max-w-7xl bg-white p-8 md:p-10 rounded-3xl shadow-2xl border border-gray-100/50">
+      <div className="w-full max-w-7xl bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-2xl border border-gray-100/50">
          <Link href="/" className="inline-flex items-center text-gray-400 hover:text-[#FF7B00] mb-6 transition group">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -218,33 +219,32 @@ export default function CreateStoryPage() {
             <span className="font-bold text-sm">Back to Dashboard</span>
          </Link>
 
-         <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-[#0A0A0A] tracking-tight mb-2">Create New Story</h1>
+         <div className="mb-6 md:mb-8">
+            <h1 className="text-xl md:text-4xl font-extrabold text-[#0A0A0A] tracking-tight mb-2">Create New Story</h1>
             <p className="text-gray-400 font-medium">Define the world you want to explore and let the AI build the rest.</p>
          </div>
 
          <form onSubmit={handleCreate} className="space-y-6">
            <div>
-             <label className="block text-sm font-bold text-[#0A0A0A] mb-2">Story Title</label>
+             <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Story Title</label>
              <input 
                type="text" 
-               value={title}
                onChange={e => setTitle(e.target.value)}
-               className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-gray-800 placeholder-gray-400 font-medium"
+               className="w-full p-3 md:p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-800 placeholder-gray-400"
                required
                placeholder="e.g. The Lost Kingdom"
              />
            </div>
 
             <div>
-              <label className="block text-sm font-bold text-[#0A0A0A] mb-2">Genres (Select at least one)</label>
-              <div className="flex flex-wrap gap-2">
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Genres (Select at least one)</label>
+              <div className="grid grid-rows-2 grid-flow-col auto-cols-max overflow-x-auto pb-4 -mx-5 px-5 md:flex md:flex-wrap md:overflow-visible md:pb-0 md:mx-0 md:px-0 gap-2 custom-scrollbar snap-x no-scrollbar">
                 {GENRE_LIST.map(genre => (
                   <button
                     key={genre}
                     type="button"
                     onClick={() => toggleGenre(genre)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
+                    className={`shrink-0 snap-start px-4 py-2 rounded-full text-xs font-bold transition-all ${
                       genres.includes(genre) 
                         ? "bg-[#FF7B00] text-white shadow-md transform scale-105" 
                         : "bg-gray-100 text-gray-500 hover:bg-gray-200"
@@ -258,7 +258,7 @@ export default function CreateStoryPage() {
 
              <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-bold text-[#0A0A0A]">Initial Prompt / Premise</label>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">Initial Prompt / Premise</label>
                 <button
                     type="button"
                     onClick={handleGeneratePremise}
@@ -289,7 +289,7 @@ export default function CreateStoryPage() {
                     e.target.style.height = e.target.scrollHeight + 'px';
                   }}
                   style={{ minHeight: '160px' }}
-                  className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-gray-800 placeholder-gray-400 font-medium resize-none overflow-hidden pb-12"
+                  className="w-full p-3 md:p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-800 placeholder-gray-400 resize-none overflow-hidden pb-12"
                   required
                   placeholder="e.g. You are a knight seeking the holy grail in a cyberpunk world..."
                 />
@@ -353,7 +353,7 @@ export default function CreateStoryPage() {
            <button 
              type="submit" 
              disabled={isGenerating}
-             className="w-full bg-[#FF7B00] text-gray-50 py-4 rounded-xl font-bold text-lg hover:bg-[#e06c00] transition shadow-lg hover:shadow-xl active:scale-[0.98] transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+             className="w-full bg-[#FF7B00] text-gray-50 py-3 md:py-4 rounded-xl font-bold text-lg hover:bg-[#e06c00] transition shadow-lg hover:shadow-xl active:scale-[0.98] transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
            >
              {isGenerating ? (
                 <>
