@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { history, initialPrompt, token } = await req.json();
+    const { history, initialPrompt, genres, token } = await req.json();
 
     // 1. Validate Auth
     let userId = null;
@@ -39,13 +39,14 @@ export async function POST(req) {
         1. Lanjutkan cerita berdasarkan input player dan histori.
         2. Buat narasi 150-250 kata yang immersif, deskriptif, dan menarik.
         3. Di akhir, berikan TEPAT 3-5 pilihan aksi untuk player.
-        4. PENTING: Pastikan BAHASA pada Pilihan SAMA dengan BAHASA pada Narasi Cerita. Jika cerita Bahasa Indonesia, pilihan harus Bahasa Indonesia. Jika Inggris, pilihan harus Inggris.
-        5. Format response HARUS:
+        4. PENTING: Narasi cerita menyesuaikan dengan bahasa input player (Indonesia/Inggris). TETAPI, Pilihan (Choices) WAJIB SELALU dalam BAHASA INGGRIS.
+        5. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
+        6. Format response HARUS:
            [Narasi Cerita]
            
-           Pilihan:
-           1. [Opsi 1]
-           2. [Opsi 2]
+           Choices:
+           1. [Option 1 in English]
+           2. [Option 2 in English]
            ...
            
         JANGAN berikan penjelasan di luar cerita.`),
@@ -65,8 +66,8 @@ export async function POST(req) {
     const text = response.content;
 
     // 5. Parse
-    // Regex to find the separator (Pilihan:, Choices:, etc.) - Case insensitive
-    const separatorRegex = /(?:Pilihan|Choices|Options|Actions):\s*/i;
+    // Regex to find the separator (Pilihan:, Choices:, etc.) - Case insensitive, handles markdown bold/header
+    const separatorRegex = /(?:^|\n|[\s\*#]+)(?:Pilihan|Choices|Options|Actions):[\s\*#]*/i;
     const match = text.match(separatorRegex);
     
     let story = text;

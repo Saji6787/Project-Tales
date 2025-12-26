@@ -1,11 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/lib/firebase/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+  if (pathname === "/login") return null;
 
   const handleLogout = async () => {
     await logout();

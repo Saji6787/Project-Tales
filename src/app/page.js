@@ -111,14 +111,32 @@ export default function Dashboard() {
                   </div>
               )}
 
-              <div className="h-full flex flex-col">
-                <h2 className="text-2xl font-bold text-white mb-3 line-clamp-1 pr-10">{story.title}</h2>
-                <div className="flex-grow">
-                   <p className="text-white/90 text-sm leading-relaxed line-clamp-4 font-medium">
+              <div className="h-full flex flex-col pt-2">
+                {/* Header: Genres & Menu Spacer */}
+                <div className="flex justify-between items-start mb-2">
+                    <div className="flex flex-wrap gap-2 pr-8">
+                      {story.genres && story.genres.map(genre => (
+                          <span key={genre} className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              {genre}
+                          </span>
+                      ))}
+                    </div>
+                </div>
+
+                {/* Title */}
+                <h2 className="text-2xl font-bold text-white mb-2 leading-tight pr-8 break-words">
+                    {story.title || "(No Title)"}
+                </h2>
+
+                {/* Description */}
+                <div className="flex-grow overflow-hidden">
+                   <p className="text-white/90 text-sm leading-relaxed line-clamp-3 font-medium">
                     {story.initialPrompt}
                     </p>
                 </div>
-                <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-end">
+
+                {/* Footer */}
+                <div className="mt-auto pt-4 border-t border-white/20">
                     <span className="text-xs text-white/70 font-semibold bg-black/20 px-3 py-1 rounded-full">
                         Created: {story.createdAt ? new Date(story.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}
                     </span>
