@@ -393,11 +393,11 @@ export default function StoryPage() {
 
   // Helper to render Choices Content
   const renderChoices = (isMobile) => (
-      <div className={`h-full flex flex-col ${isMobile ? 'p-0' : 'p-6 overflow-y-auto'}`}>
+      <div className={`flex flex-col ${isMobile ? 'p-0' : 'p-6 h-full'}`}>
           {!isMobile && (
-              <h2 className="text-xl font-bold text-white mb-6 flex items-center justify-between gap-2 whitespace-nowrap">
+              <h2 className="text-xl font-bold text-white mb-6 flex items-center justify-between gap-2 whitespace-nowrap shrink-0">
                 <div className="flex items-center gap-2">
-                  <span>Your Choice</span>
+                  <span>Choose Your Path:</span>
                   {!processing && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>}
                 </div>
                 <button 
@@ -413,74 +413,76 @@ export default function StoryPage() {
               </h2>
           )}
           
-          <div className={`flex-1 ${!isMobile ? 'overflow-y-auto pr-2 custom-scrollbar' : ''} space-y-3 mb-4`}>
-          {!processing && activeChoices && activeChoices.length > 0 ? (
-              <div className="space-y-3">
-                {activeChoices.map((choice, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleChoice(cleanChoiceText(choice))}
-                    className={`w-full text-left p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-95 backdrop-blur-sm group/btn ${
-                        isMobile 
-                        ? 'bg-[#FF7B00] text-white shadow-lg border border-white/20' 
-                        : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className={`font-bold transition-colors ${isMobile ? 'text-white/80' : 'text-white/60 group-hover/btn:text-white'}`}>{idx + 1}.</span>
-                      <span className="font-medium text-sm md:text-base text-white">{cleanChoiceText(choice)}</span>
-                    </div>
-                  </button>
-                ))}
+          <div className={`flex-1 ${!isMobile ? 'overflow-y-auto pr-2 custom-scrollbar' : ''} flex flex-col`}>
+              <div className={`${isMobile ? 'space-y-2 mb-2' : 'space-y-3 mb-4'}`}>
+              {!processing && activeChoices && activeChoices.length > 0 ? (
+                  <div className="space-y-3">
+                    {activeChoices.map((choice, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleChoice(cleanChoiceText(choice))}
+                        className={`w-full text-left ${isMobile ? 'p-3' : 'p-4'} rounded-xl transition-all hover:scale-[1.02] active:scale-95 backdrop-blur-sm group/btn ${
+                            isMobile 
+                            ? 'bg-[#FF7B00] text-white shadow-lg border border-white/20' 
+                            : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`font-bold transition-colors ${isMobile ? 'text-white/80' : 'text-white/60 group-hover/btn:text-white'}`}>{idx + 1}.</span>
+                          <span className="font-medium text-sm md:text-base text-white">{cleanChoiceText(choice)}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+              ) : (
+                   !processing && (!activeChoices || activeChoices.length === 0) && (
+                     <div className={`text-center py-10 italic border rounded-xl p-4 ${isMobile ? 'text-gray-400 border-gray-200' : 'text-white/60 border-white/10'}`}>
+                       Refresh the choices
+                     </div>
+                   )
+              )}
               </div>
-          ) : (
-               !processing && (!activeChoices || activeChoices.length === 0) && (
-                 <div className={`text-center py-10 italic border rounded-xl p-4 ${isMobile ? 'text-gray-400 border-gray-200' : 'text-white/60 border-white/10'}`}>
-                   Refresh the choices
-                 </div>
-               )
-          )}
+
+              {/* Custom Choice Input - Now part of the flow */}
+              {!processing && (
+                  <div className={`${isMobile ? 'pt-2 border-t border-gray-200 mt-2' : 'pt-4 border-t border-white/20 mt-4'}`}>
+                     <label className={`block text-xs font-bold ${isMobile ? 'mb-1' : 'mb-2'} uppercase tracking-wide ${isMobile ? 'text-gray-500' : 'text-white/70'}`}>Custom Choice</label>
+                     <div className={`flex items-end gap-2 p-2 rounded-xl border focus-within:border-opacity-100 transition-all ${
+                         isMobile 
+                         ? 'bg-white border-gray-300 focus-within:border-[#FF7B00]' 
+                         : 'bg-white/10 border-white/20 focus-within:bg-white/20 focus-within:border-white/50'
+                     }`}>
+                         <textarea
+                             value={customChoice}
+                             onChange={(e) => {
+                                 setCustomChoice(e.target.value);
+                                 e.target.style.height = 'auto';
+                                 e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+                             }}
+                             className={`flex-1 bg-transparent text-sm font-medium focus:outline-none resize-none max-h-[100px] py-1 px-1 custom-scrollbar ${isMobile ? 'text-gray-800 placeholder-gray-400' : 'text-white placeholder-white/40'}`}
+                             placeholder="Type your own action..."
+                             rows={1}
+                             style={{ minHeight: '24px' }}
+                         />
+                         <button
+                             onClick={() => {
+                                 if (customChoice.trim()) {
+                                     handleChoice(customChoice);
+                                     setCustomChoice("");
+                                 }
+                             }}
+                             disabled={!customChoice.trim() || processing}
+                             className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg ${isMobile ? 'bg-[#FF7B00] text-white' : 'bg-white text-[#FF7B00] hover:bg-gray-100'}`}
+                         >
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                 <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                             </svg>
+                         </button>
+                     </div>
+                  </div>
+              )}
           </div>
-
-          {/* Custom Choice Input */}
-          {!processing && (
-              <div className={`mt-auto pt-4 ${isMobile ? 'border-t border-gray-200' : 'border-t border-white/20'}`}>
-                 <label className={`block text-xs font-bold mb-2 uppercase tracking-wide ${isMobile ? 'text-gray-500' : 'text-white/70'}`}>Custom Choice</label>
-                 <div className={`flex items-end gap-2 p-2 rounded-xl border focus-within:border-opacity-100 transition-all ${
-                     isMobile 
-                     ? 'bg-white border-gray-300 focus-within:border-[#FF7B00]' 
-                     : 'bg-white/10 border-white/20 focus-within:bg-white/20 focus-within:border-white/50'
-                 }`}>
-                     <textarea
-                         value={customChoice}
-                         onChange={(e) => {
-                             setCustomChoice(e.target.value);
-                             e.target.style.height = 'auto';
-                             e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-                         }}
-                         className={`flex-1 bg-transparent text-sm font-medium focus:outline-none resize-none max-h-[100px] py-1 px-1 custom-scrollbar ${isMobile ? 'text-gray-800 placeholder-gray-400' : 'text-white placeholder-white/40'}`}
-                         placeholder="Type your own action..."
-                         rows={1}
-                         style={{ minHeight: '24px' }}
-                     />
-                     <button
-                         onClick={() => {
-                             if (customChoice.trim()) {
-                                 handleChoice(customChoice);
-                                 setCustomChoice("");
-                             }
-                         }}
-                         disabled={!customChoice.trim() || processing}
-                         className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg ${isMobile ? 'bg-[#FF7B00] text-white' : 'bg-white text-[#FF7B00] hover:bg-gray-100'}`}
-                     >
-                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                             <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-                         </svg>
-                     </button>
-                 </div>
-              </div>
-          )}
-
+          
          {processing && (
              <div className="flex flex-col items-center justify-center flex-1 space-y-4">
                  <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isMobile ? 'border-[#FF7B00]' : 'border-white'}`}></div>
@@ -648,7 +650,7 @@ export default function StoryPage() {
           {/* Mobile Choices (Inline at bottom of chat) */}
           <div className="md:hidden mt-8 mb-4">
               <h3 className="text-sm font-bold text-[#FF7B00] uppercase tracking-wider mb-3 flex items-center justify-between">
-                  <span>Your Turn</span>
+                  <span>Choose Your Path:</span>
                   <button 
                       onClick={handleRefreshChoices}
                       disabled={processing || isRefreshing}

@@ -53,7 +53,7 @@ export async function POST(req) {
         Tugas anda:
         1. Lanjutkan cerita berdasarkan input player dan histori.
         2. Buat narasi 150-250 kata yang immersif, deskriptif, dan menarik.
-        3. Di akhir, berikan TEPAT 3-5 pilihan aksi untuk player.
+        3. Di akhir, berikan TEPAT 3 pilihan aksi untuk player. Tidak lebih, tidak kurang.
         4. PENTING: Deteksi bahasa dari 'Initial Premise' atau 'Story History' sebelumnya. Gunakan bahasa TERSEBUT untuk seluruh narasi DAN pilihan (Choices).
         5. KONSISTENSI BAHASA: Jika cerita dimulai dalam Bahasa Indonesia, LANJUTKAN dalam Bahasa Indonesia, bahkan jika player mengetik aksi custom dalam bahasa lain (misal: Inggris). Jangan ganti bahasa di tengah-tengah.
         6. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
@@ -78,9 +78,9 @@ export async function POST(req) {
                  }
             }
             
-            if (turnsSinceLastChapter < 10) {
+            if (turnsSinceLastChapter < 7) {
                 return `- SAAT INI JANGAN BUAT CHAPTER BARU. Fokus lanjutkan cerita.`;
-            } else if (turnsSinceLastChapter >= 10 && turnsSinceLastChapter < 18) {
+            } else if (turnsSinceLastChapter >= 7 && turnsSinceLastChapter <= 12) {
                 return `- OPSI CHAPTER BARU: Jika momen pas, kamu BOLEH memulai Chapter baru dengan tag: ### CHAPTER [N]: [Judul]`;
             } else {
                 return `- WAJIB CHAPTER BARU: Cerita sudah cukup panjang. Kamu HARUS mengakhiri adegan ini dan memulai Chapter baru di respon ini dengan tag: ### CHAPTER [N]: [Judul]`;

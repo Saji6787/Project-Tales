@@ -295,7 +295,7 @@ export default function Navbar() {
               {/* Home Icon Button */}
               <Link href="/" className="p-2 text-gray-600 hover:text-[#FF7B00] transition rounded-full hover:bg-orange-50" title="Dashboard">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V9.75M8.25 21h8.25" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 3l9 6.75V21a1.5 1.5 0 01-1.5 1.5h-4.5V13.5h-6v9H4.5A1.5 1.5 0 013 21V9.75z" />
                 </svg>
               </Link>
 
