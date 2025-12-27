@@ -555,6 +555,10 @@ export default function StoryPage() {
                </div>
              </div>
           )}
+          {/* Short AI Disclaimer */}
+          <div className="text-center text-[10px] text-gray-400/60 pb-4 pt-10 select-none">
+             AI-generated content. Fiction only.
+          </div>
           <div ref={bottomRef} />
         </div>
       </div>

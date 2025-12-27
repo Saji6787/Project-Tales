@@ -33,7 +33,7 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="bg-black text-[#FF7B00] hover:bg-gray-900 px-4 py-1.5 rounded-full text-sm transition font-bold shadow-sm">
+            <Link href="/login" className="bg-[#FF7B00] text-white hover:bg-[#E06C00] px-4 py-1.5 rounded-full text-sm transition font-bold shadow-md">
               Login
             </Link>
           )}

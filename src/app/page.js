@@ -5,6 +5,84 @@ import { getStories, deleteStory } from "@/lib/firebase/firestore"; // Import de
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+function LandingPage() {
+  return (
+    <div className="min-h-screen bg-[#FCF5EF] flex flex-col font-sans text-gray-900">
+      {/* Hero Section */}
+      <main className="grow flex flex-col items-center justify-center text-center px-6 py-12 md:py-20 max-w-5xl mx-auto">
+        <div className="animate-in fade-in slide-in-from-bottom-5 duration-700">
+          <span className="inline-block py-1 px-3 rounded-full bg-orange-100 text-[#FF7B00] text-xs font-bold uppercase tracking-wider mb-6">
+             AI-Powered Interactive Storytelling
+          </span>
+          <h1 className="text-5xl md:text-7xl font-black text-[#0A0A0A] mb-6 leading-tight tracking-tight">
+            Your Story, <br className="hidden md:block" />
+            <span className="text-[#FF7B00]">Your Way.</span>
+          </h1>
+          <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Experience infinite interactive adventures powered by AI. 
+            You aren&apos;t just reading a story—you&apos;re living it. 
+            Shape the narrative with every choice you make.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/login" className="bg-[#FF7B00] text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-[#E06C00] transition shadow-xl hover:shadow-2xl hover:-translate-y-1 transform duration-200">
+              Start Your Adventure
+            </Link>
+
+          </div>
+        </div>
+      </main>
+
+      {/* Features Grid */}
+      <section id="features" className="bg-white py-20 px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
+           {/* Feature 1 */}
+           <div className="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-[#FF7B00]/20 transition-colors">
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-[#FF7B00] mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-3">Infinite Possibilities</h3>
+              <p className="text-gray-600 leading-relaxed">
+                No two stories are alike. Explore endless genres from Cyberpunk to High Fantasy, generated instantly just for you.
+              </p>
+           </div>
+           
+           {/* Feature 2 */}
+           <div className="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-[#FF7B00]/20 transition-colors">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-3">Total Freedom</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Make choices that matter. The AI adapts to *your* decisions in real-time. Do anything, go anywhere.
+              </p>
+           </div>
+
+           {/* Feature 3 */}
+           <div className="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-[#FF7B00]/20 transition-colors">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a16.084 16.084 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-3">Custom Style</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Define the tone—dark, humorous, or epic. Customize your narrative voice to match your preference.
+              </p>
+           </div>
+        </div>
+        <div className="text-center mt-20 text-gray-400 text-sm">
+          © {new Date().getFullYear()} Project Tales. AI Roleplay Engine. <br />
+          Created by <a href="https://github.com/Saji6787" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF7B00] transition">Saji6787</a>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -17,20 +95,20 @@ export default function Dashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    const loadStories = () => {
+        setFetching(true);
+        getStories(user.uid).then(data => {
+            setStories(data);
+            setFetching(false);
+        });
+    };
+
     if (user) {
       loadStories();
     } else if (!loading) {
       setFetching(false);
     }
   }, [user, loading]);
-
-  const loadStories = () => {
-    setFetching(true);
-    getStories(user.uid).then(data => {
-      setStories(data);
-      setFetching(false);
-    });
-  };
   
   // Close menu when clicking outside
   useEffect(() => {
@@ -65,8 +143,8 @@ export default function Dashboard() {
       setActiveMenuId(activeMenuId === id ? null : id);
   };
 
-  if (loading || fetching) return <div className="p-10 text-center">Loading...</div>;
-  if (!user) return <div className="p-10 text-center">Please log in.</div>;
+  if (loading || fetching) return <div className="min-h-screen bg-[#FCF5EF] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF7B00]"></div></div>;
+  if (!user) return <LandingPage />;
 
   return (
     <div className="container mx-auto p-4 md:p-10 pb-32">
@@ -194,6 +272,16 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      
+      {/* Dashboard Footer */}
+      <div className="mt-20 text-center text-xs text-gray-400 border-t border-gray-200 pt-6">
+        <div className="max-w-2xl mx-auto space-y-2">
+            <p className="font-semibold text-gray-500 uppercase tracking-wider">AI CONTENT DISCLAIMER</p>
+            <p>This story is a work of fiction generated by Artificial Intelligence. Names, characters, businesses, places, events, locales, and incidents are either the products of the AI&apos;s imagination or used in a fictitious manner.</p> 
+            <p>Any resemblance to actual persons, living or dead, or actual events is purely coincidental. The views and opinions expressed in this story do not necessarily reflect the official policy or position of Project Tales.</p>
+        </div>
+        <p className="mt-6">Created by <a href="https://github.com/Saji6787" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF7B00] transition font-bold">Saji6787</a></p>
+      </div>
     </div>
   );
 }
