@@ -16,10 +16,7 @@ export default function StoryPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null); // Index of message being edited
   const [editContent, setEditContent] = useState(""); // Content of message being edited
-  const [showMobileEdit, setShowMobileEdit] = useState(false); // Mobile edit button visibility check
-  const [pressedIndex, setPressedIndex] = useState(null); // Track touch intent for animation
   const bottomRef = useRef(null);
-  const longPressTimer = useRef(null);
 
   useEffect(() => {
     if (user && id) {
@@ -249,17 +246,22 @@ export default function StoryPage() {
       setEditContent("");
   };
 
-  const handleTouchStart = (index) => {
-     if (index === story.history.length - 1) {
-         setPressedIndex(index);
-         longPressTimer.current = setTimeout(() => {
-             setShowMobileEdit(true);
-             setPressedIndex(null); // Reset animation after trigger
-         }, 500);
-     }
+  const handlePressStart = (index) => {
+     // Only allow for last message
+     if (index !== story.history.length - 1) return;
+     
+     setPressedIndex(index);
+     longPressTimer.current = setTimeout(() => {
+         // Debug message as requested
+         // alert("Mobile Edit Mode Triggered!"); 
+         
+         setShowMobileEdit(true);
+         setPressedIndex(null); 
+         if (navigator.vibrate) navigator.vibrate(50);
+     }, 400);
   };
 
-  const handleTouchEnd = () => {
+  const handlePressEnd = () => {
      setPressedIndex(null);
      if (longPressTimer.current) {
          clearTimeout(longPressTimer.current);
@@ -499,9 +501,12 @@ export default function StoryPage() {
              <h1 className="text-3xl font-extrabold text-[#FF7B00] tracking-tight">{story.title}</h1>
              <p className="text-sm font-bold text-[#FF7B00]/90 mt-2 italic text-justify leading-relaxed">{story.initialPrompt}</p>
           </div>
-
-          {story.history.map((turn, index) => (
-            <div key={index}>
+           
+           {(() => {
+             const lastPlayerIndex = story.history.reduce((last, turn, idx) => turn.role === 'player' ? idx : last, -1);
+             
+             return story.history.map((turn, index) => (
+             <div key={index}>
                 {/* Chapter Divider */}
                 {turn.chapterMetadata && (
                     <div className="flex items-center justify-center py-8 my-4">
@@ -530,14 +535,9 @@ export default function StoryPage() {
                       </svg>
                   </button>
               )}
-              <div 
-                onTouchStart={() => turn.role === 'player' && handleTouchStart(index)}
-                onTouchEnd={handleTouchEnd}
-                className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative cursor-pointer transition-transform duration-200 ease-out ${
-                    pressedIndex === index ? 'scale-95' : 'scale-100'
-                } ${
+              <div className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative ${
                 turn.role === 'player' 
-                  ? 'bg-[#FF7B00] text-white rounded-br-none' 
+                  ? `bg-[#FF7B00] text-white rounded-br-none ${index === lastPlayerIndex ? 'mb-6 md:mb-0' : ''}` 
                   : 'bg-white text-[#0A0A0A] border border-gray-100 rounded-bl-none'
               }`}>
                 {/* Edit Form for User */}
@@ -579,17 +579,10 @@ export default function StoryPage() {
                         </div>
                         
                         {/* User Edit Menu (3 dots) - Repositioned Below Bubble */}
-                        {turn.role === 'player' && !processing && (
-                            <div className={`absolute top-full right-0 mt-1 z-10 transition-all duration-200 ${
-                                (showMobileEdit && index === story.history.length - 1) 
-                                    ? 'opacity-100 translate-y-0' 
-                                    : 'opacity-0 translate-y-2 md:group-hover/bubble:opacity-100 md:group-hover/bubble:translate-y-0 pointer-events-none md:pointer-events-auto'
-                            } ${(showMobileEdit && index === story.history.length - 1) ? 'pointer-events-auto' : ''}`}>
+                        {turn.role === 'player' && !processing && index === lastPlayerIndex && (
+                            <div className="absolute top-full right-0 mt-2 z-10 transition-all duration-200 opacity-100 md:opacity-0 md:group-hover/bubble:opacity-100 translate-y-0">
                                 <button
-                                    onClick={() => {
-                                        handleEditStart(index, turn.content);
-                                        setShowMobileEdit(false);
-                                    }}
+                                    onClick={() => handleEditStart(index, turn.content)}
                                     className="px-3 py-1 bg-white shadow-md border border-gray-100 rounded-lg text-xs font-bold text-gray-500 hover:text-[#FF7B00] hover:bg-gray-50 transition-colors flex items-center gap-1"
                                     title="Edit message"
                                 >
@@ -604,15 +597,18 @@ export default function StoryPage() {
                         {/* AI Controls: Reload & Version Nav */}
                         {turn.role === 'ai' && !processing && (
                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100/50">
-                                <button 
-                                    onClick={() => handleRegenerate(index)}
-                                    title="Regenerate response"
-                                    className="p-1.5 text-gray-400 hover:text-[#FF7B00] hover:bg-orange-50 rounded-lg transition-colors"
-                                >
-                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                     </svg>
-                                </button>
+                                {/* Only show Regenerate if it's the latest message */}
+                                {index === story.history.length - 1 && (
+                                    <button 
+                                        onClick={() => handleRegenerate(index)}
+                                        title="Regenerate response"
+                                        className="p-1.5 text-gray-400 hover:text-[#FF7B00] hover:bg-orange-50 rounded-lg transition-colors"
+                                    >
+                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                         </svg>
+                                    </button>
+                                )}
                                 
                                 {turn.versions && turn.versions.length > 1 && (
                                     <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-0.5">
@@ -646,7 +642,8 @@ export default function StoryPage() {
               </div>
             </div>
           </div>
-          ))}
+          ));
+          })()}
 
           {/* Mobile Choices (Inline at bottom of chat) */}
           <div className="md:hidden mt-8 mb-4">
