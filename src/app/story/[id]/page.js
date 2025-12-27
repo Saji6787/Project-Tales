@@ -16,7 +16,10 @@ export default function StoryPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null); // Index of message being edited
   const [editContent, setEditContent] = useState(""); // Content of message being edited
+  const [showMobileEdit, setShowMobileEdit] = useState(false); // Mobile edit button visibility check
+  const [pressedIndex, setPressedIndex] = useState(null); // Track touch intent for animation
   const bottomRef = useRef(null);
+  const longPressTimer = useRef(null);
 
   useEffect(() => {
     if (user && id) {
@@ -27,9 +30,33 @@ export default function StoryPage() {
     }
   }, [user, id]);
 
+  // Scroll logic
+  const isInitialLoad = useRef(true);
+  const lastMessageRef = useRef(null);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (story?.history?.length > 0) {
+        // On initial load, scroll to the last message (not the very bottom)
+        if (isInitialLoad.current) {
+            lastMessageRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+            isInitialLoad.current = false;
+        } else {
+            // On subsequent updates (new messages), scroll smoothly to bottom to show generation
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+    }
   }, [story?.history]);
+
+  // Helper to get current chapter number
+  const getCurrentChapter = (historyData) => {
+      // Find the last message that has chapterMetadata
+      for (let i = historyData.length - 1; i >= 0; i--) {
+          if (historyData[i].chapterMetadata) {
+              return historyData[i].chapterMetadata.number;
+          }
+      }
+      return 1; // Default to Chapter 1
+  };
 
   const handleChoice = async (choice) => {
     if (!user || processing) return;
@@ -45,6 +72,8 @@ export default function StoryPage() {
 
       // 2. Call API
       const token = await user.getIdToken();
+      const currentChapter = getCurrentChapter(newHistory);
+      
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +81,8 @@ export default function StoryPage() {
            token, 
            history: newHistory,
            initialPrompt: story.initialPrompt,
-           style: story.storyStyle // Pass style 
+           style: story.storyStyle, // Pass style 
+           currentChapter: currentChapter
         }),
       });
       
@@ -63,7 +93,8 @@ export default function StoryPage() {
       const aiTurn = { 
           role: "ai", 
           content: data.story, 
-          choices: data.choices || [] 
+          choices: data.choices || [],
+          chapterMetadata: data.chapter || null
       };
       
       await updateStoryHistory(user.uid, id, aiTurn);
@@ -80,6 +111,49 @@ export default function StoryPage() {
     }
   };
 
+  const handleRetryLastTurn = async () => {
+    if (processing || !user) return;
+    setProcessing(true);
+    
+    try {
+        const token = await user.getIdToken();
+        const currentChapter = getCurrentChapter(story.history);
+        
+        const res = await fetch("/api/generate", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({
+                 token,
+                 history: story.history,
+                 initialPrompt: story.initialPrompt,
+                 genres: story.genres,
+                 style: story.storyStyle,
+                 currentChapter: currentChapter
+             })
+        });
+        
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        const aiTurn = {
+           role: "ai",
+           content: data.story,
+           choices: data.choices || [],
+           chapterMetadata: data.chapter || null
+        };
+        
+        const newHistory = [...story.history, aiTurn];
+        setStory(prev => ({ ...prev, history: newHistory }));
+        await saveStoryHistory(user.uid, id, newHistory);
+        
+    } catch (err) {
+        console.error("Retry error", err);
+        alert("Failed to retry: " + err.message);
+    } finally {
+        setProcessing(false);
+    }
+  };
+
   const handleRegenerate = async (index) => {
     if (processing || !user) return;
     setProcessing(true);
@@ -89,6 +163,8 @@ export default function StoryPage() {
     
     try {
         const token = await user.getIdToken();
+        const currentChapter = getCurrentChapter(historyContext);
+
         const res = await fetch("/api/generate", {
              method: "POST",
              headers: { "Content-Type": "application/json" },
@@ -96,10 +172,9 @@ export default function StoryPage() {
                  token,
                  history: historyContext,
                  initialPrompt: story.initialPrompt,
-                 history: historyContext,
-                 initialPrompt: story.initialPrompt,
                  genres: story.genres,
-                 style: story.storyStyle // Pass style
+                 style: story.storyStyle, // Pass style
+                 currentChapter: currentChapter
              })
         });
         
@@ -125,7 +200,8 @@ export default function StoryPage() {
             content: data.story,
             choices: data.choices || [], // Update choices to match new story
             versions: newVersions,
-            currentVersionIndex: newVersions.length - 1
+            currentVersionIndex: newVersions.length - 1,
+            chapterMetadata: data.chapter || currentTurn.chapterMetadata // preserve or update chapter if regenerated
         };
         
         updatedHistory[index] = newTurn;
@@ -173,6 +249,23 @@ export default function StoryPage() {
       setEditContent("");
   };
 
+  const handleTouchStart = (index) => {
+     if (index === story.history.length - 1) {
+         setPressedIndex(index);
+         longPressTimer.current = setTimeout(() => {
+             setShowMobileEdit(true);
+             setPressedIndex(null); // Reset animation after trigger
+         }, 500);
+     }
+  };
+
+  const handleTouchEnd = () => {
+     setPressedIndex(null);
+     if (longPressTimer.current) {
+         clearTimeout(longPressTimer.current);
+     }
+  };
+
   const handleEditSave = async (index) => {
       if (!user || processing || !editContent.trim()) return;
       
@@ -198,6 +291,8 @@ export default function StoryPage() {
 
           // 3. Call API to generate fresh continuation
           const token = await user.getIdToken();
+          const currentChapter = getCurrentChapter(newHistoryContext);
+
           const res = await fetch("/api/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -205,10 +300,9 @@ export default function StoryPage() {
                   token,
                   history: newHistoryContext,
                   initialPrompt: story.initialPrompt,
-                  history: newHistoryContext,
-                  initialPrompt: story.initialPrompt,
                   genres: story.genres,
-                  style: story.storyStyle // Pass style
+                  style: story.storyStyle, // Pass style
+                  currentChapter: currentChapter
               })
           });
           
@@ -219,7 +313,8 @@ export default function StoryPage() {
           const aiTurn = {
               role: "ai",
               content: data.story,
-              choices: data.choices || []
+              choices: data.choices || [],
+              chapterMetadata: data.chapter || null
           };
           
           const finalHistory = [...newHistoryContext, aiTurn];
@@ -247,8 +342,6 @@ export default function StoryPage() {
                 token,
                 history: story.history,
                 initialPrompt: story.initialPrompt,
-                history: story.history,
-                initialPrompt: story.initialPrompt,
                 genres: story.genres,
                 style: story.storyStyle // Pass style
             })
@@ -266,19 +359,6 @@ export default function StoryPage() {
                 }
                 return { ...prev, history: newHistory };
             });
-            // Note: We are not updating Firestore history for this purely UI refresh preference, 
-            // but effectively the next action will continue from these choices. 
-            // If persistence of *offered* choices is needed, we'd need to update the doc.
-            // For now, let's update Firestore too to keep sync.
-            const lastTurn = story.history[story.history.length - 1];
-            if (lastTurn.role === 'ai') {
-                 // We need to fetch the story doc and update the last element of history array...
-                 // Firestore array update is tricky for modifying last element. 
-                 // Simpler approach: Just update local state. The user's next action is what matters.
-                 // Actually, if they refresh and reload page, they want the new choices.
-                 // But replacing an array item by index in Firestore requires reading entire array.
-                 // Let's stick to local update for responsiveness, unless critical.
-            }
         }
     } catch (err) {
         console.error("Refresh error", err);
@@ -306,15 +386,10 @@ export default function StoryPage() {
     if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
       cleaned = cleaned.slice(1, -1);
     }
-    // You might also want to remove inner brackets if the model outputs paragraphs wrapped in brackets
-    // But usually it's just the whole block. Let's start with outer.
-    
-    // Replace newline characters with proper markdown paragraphs
-    // Ensure there are double newlines for ReactMarkdown to render paragraphs
     return cleaned.replace(/\n/g, '\n\n');
   };
 
-  // Helper to render Choices Content (Reuse for both Mobile Inline and Desktop Sidebar)
+  // Helper to render Choices Content
   const renderChoices = (isMobile) => (
       <div className={`h-full flex flex-col ${isMobile ? 'p-0' : 'p-6 overflow-y-auto'}`}>
           {!isMobile && (
@@ -426,8 +501,41 @@ export default function StoryPage() {
           </div>
 
           {story.history.map((turn, index) => (
-            <div key={index} className={`flex ${turn.role === 'player' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative ${
+            <div key={index}>
+                {/* Chapter Divider */}
+                {turn.chapterMetadata && (
+                    <div className="flex items-center justify-center py-8 my-4">
+                        <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
+                        <div className="px-4 text-center">
+                            <span className="block text-xs font-bold text-[#FF7B00] uppercase tracking-widest mb-1">Chapter {turn.chapterMetadata.number}</span>
+                            <span className="block text-xl font-serif font-bold text-[#FF7B00]">{turn.chapterMetadata.title}</span>
+                        </div>
+                        <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
+                    </div>
+                )}
+                
+                <div 
+                    ref={index === story.history.length - 1 ? lastMessageRef : null}
+                    className={`flex items-end gap-2 ${turn.role === 'player' ? 'justify-end' : 'justify-start'}`}
+                >
+              {/* Retry Button for User (Only if last message and no AI response) */}
+              {turn.role === 'player' && index === story.history.length - 1 && !processing && (
+                  <button 
+                      onClick={handleRetryLastTurn}
+                      className="p-2 mb-2 rounded-full bg-gray-100 hover:bg-[#FF7B00]/10 text-gray-400 hover:text-[#FF7B00] transition-colors shadow-sm"
+                      title="Retry / Continue Story"
+                  >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                      </svg>
+                  </button>
+              )}
+              <div 
+                onTouchStart={() => turn.role === 'player' && handleTouchStart(index)}
+                onTouchEnd={handleTouchEnd}
+                className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative cursor-pointer transition-transform duration-200 ease-out ${
+                    pressedIndex === index ? 'scale-95' : 'scale-100'
+                } ${
                 turn.role === 'player' 
                   ? 'bg-[#FF7B00] text-white rounded-br-none' 
                   : 'bg-white text-[#0A0A0A] border border-gray-100 rounded-bl-none'
@@ -470,17 +578,25 @@ export default function StoryPage() {
                           <ReactMarkdown>{formatContent(turn.content)}</ReactMarkdown>
                         </div>
                         
-                        {/* User Edit Menu (3 dots) */}
+                        {/* User Edit Menu (3 dots) - Repositioned Below Bubble */}
                         {turn.role === 'player' && !processing && (
-                            <div className="absolute top-2 right-full mr-2 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center h-full">
+                            <div className={`absolute top-full right-0 mt-1 z-10 transition-all duration-200 ${
+                                (showMobileEdit && index === story.history.length - 1) 
+                                    ? 'opacity-100 translate-y-0' 
+                                    : 'opacity-0 translate-y-2 md:group-hover/bubble:opacity-100 md:group-hover/bubble:translate-y-0 pointer-events-none md:pointer-events-auto'
+                            } ${(showMobileEdit && index === story.history.length - 1) ? 'pointer-events-auto' : ''}`}>
                                 <button
-                                    onClick={() => handleEditStart(index, turn.content)}
-                                    className="p-1.5 bg-white shadow-sm border border-gray-100 rounded-full text-gray-400 hover:text-[#FF7B00] transition-colors"
+                                    onClick={() => {
+                                        handleEditStart(index, turn.content);
+                                        setShowMobileEdit(false);
+                                    }}
+                                    className="px-3 py-1 bg-white shadow-md border border-gray-100 rounded-lg text-xs font-bold text-gray-500 hover:text-[#FF7B00] hover:bg-gray-50 transition-colors flex items-center gap-1"
                                     title="Edit message"
                                 >
-                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
                                      <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                    </svg>
+                                   Edit
                                 </button>
                             </div>
                         )}
@@ -529,6 +645,7 @@ export default function StoryPage() {
                 )}
               </div>
             </div>
+          </div>
           ))}
 
           {/* Mobile Choices (Inline at bottom of chat) */}

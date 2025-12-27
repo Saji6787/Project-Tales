@@ -92,6 +92,7 @@ export default function Dashboard() {
   // UI State
   const [activeMenuId, setActiveMenuId] = useState(null); // Which card's menu is open?
   const [storyToDelete, setStoryToDelete] = useState(null); // Which story is being deleted?
+  const [selectedStory, setSelectedStory] = useState(null); // Story selected for detail modal
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -143,6 +144,16 @@ export default function Dashboard() {
       setActiveMenuId(activeMenuId === id ? null : id);
   };
 
+  const handleStoryClick = (story) => {
+      setSelectedStory(story);
+  };
+
+  const enterChat = () => {
+      if (selectedStory) {
+          router.push(`/story/${selectedStory.id}`);
+      }
+  };
+
   if (loading || fetching) return <div className="min-h-screen bg-[#FCF5EF] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF7B00]"></div></div>;
   if (!user) return <LandingPage />;
 
@@ -159,24 +170,35 @@ export default function Dashboard() {
         {stories.map(story => (
           <div 
              key={story.id} 
-             onClick={() => router.push(`/story/${story.id}`)}
+             onClick={() => handleStoryClick(story)}
              className="block group cursor-pointer"
           >
-            <div className="bg-[#FF7B00] h-52 md:h-64 p-5 md:p-8 rounded-2xl md:rounded-[2rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-[#FF7B00] hover:border-[#e06c00] relative">
+            <div className="bg-[#FF7B00] h-52 md:h-64 rounded-2xl md:rounded-[2rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-[#FF7B00] hover:border-[#e06c00] relative overflow-hidden">
               
+              {/* Cover Image Background (Left Side with Blur) */}
+              {story.coverImage && (
+                  <>
+                    <div 
+                        className="absolute inset-y-0 left-0 w-2/3 bg-cover bg-center z-0"
+                        style={{ backgroundImage: `url(${story.coverImage})` }}
+                    />
+                    <div className="absolute inset-y-0 left-0 w-2/3 bg-gradient-to-r from-transparent via-[#FF7B00]/60 to-[#FF7B00] z-0" />
+                  </>
+              )}
+
               {/* Three Dots Button */}
               <button 
                 onClick={(e) => toggleMenu(e, story.id)}
-                className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-black/10 text-white transition-colors z-10"
+                className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-black/10 text-white transition-colors z-20"
               >
                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 ">
-                   <path stro keLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM17.25 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM17.25 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
                  </svg>
               </button>
 
               {/* Dropdown Menu */}
               {activeMenuId === story.id && (
-                  <div className="absolute top-12 md:top-16 right-6 bg-white rounded-xl shadow-xl py-2 w-40 z-20 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 origin-top-right border border-gray-100">
+                  <div className="absolute top-12 md:top-16 right-6 bg-white rounded-xl shadow-xl py-2 w-40 z-30 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 origin-top-right border border-gray-100">
                       <button 
                         onClick={(e) => handleDeleteClick(e, story)}
                         className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 font-bold text-sm flex items-center gap-2 transition-colors"
@@ -189,33 +211,33 @@ export default function Dashboard() {
                   </div>
               )}
 
-              <div className="h-full flex flex-col pt-2">
+              <div className="absolute inset-0 p-5 md:p-8 flex flex-col z-10">
+                {/* Title */}
+                <h2 className={`text-lg md:text-2xl font-bold text-white mb-2 leading-tight pr-8 break-words ${story.coverImage ? 'drop-shadow-md' : ''}`}>
+                    {story.title || "(No Title)"}
+                </h2>
+
                 {/* Header: Genres & Menu Spacer */}
                 <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-wrap gap-2 pr-8">
                       {story.genres && story.genres.map(genre => (
-                          <span key={genre} className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          <span key={genre} className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-sm">
                               {genre}
                           </span>
                       ))}
                     </div>
                 </div>
 
-                {/* Title */}
-                <h2 className="text-lg md:text-2xl font-bold text-white mb-2 leading-tight pr-8 break-words">
-                    {story.title || "(No Title)"}
-                </h2>
-
                 {/* Description */}
                 <div className="flex-grow overflow-hidden">
-                   <p className="text-white/90 text-xs md:text-sm leading-relaxed line-clamp-3 font-medium">
+                   <p className={`text-white/90 text-xs md:text-sm leading-relaxed line-clamp-3 font-medium ${story.coverImage ? 'drop-shadow-sm' : ''}`}>
                     {story.initialPrompt}
                     </p>
                 </div>
 
                 {/* Footer */}
                 <div className="mt-auto pt-4 border-t border-white/20">
-                    <span className="text-xs text-white/70 font-semibold bg-black/20 px-3 py-1 rounded-full">
+                    <span className="text-xs text-white/70 font-semibold bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">
                         Created: {story.createdAt ? new Date(story.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}
                     </span>
                 </div>
@@ -234,6 +256,100 @@ export default function Dashboard() {
             </div>
         )}
       </div>
+
+       {/* Story Detail Modal */}
+       {selectedStory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+           <div 
+             className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]"
+             onClick={(e) => e.stopPropagation()}
+           >
+              {/* Modal Header */}
+              <div className={`p-6 md:p-8 relative ${selectedStory.coverImage ? 'h-64 md:h-96 flex flex-col justify-end' : 'bg-[#FF7B00] text-white'}`}>
+                 
+                 {/* Hero Image Background */}
+                 {selectedStory.coverImage && (
+                    <>
+                        <div 
+                            className="absolute inset-0 bg-cover bg-center z-0"
+                            style={{ backgroundImage: `url(${selectedStory.coverImage})` }}
+                        />
+                         {/* Gradient Overlay: Solid white at bottom (behind text), fades up */}
+                         <div className="absolute inset-0 bg-gradient-to-t from-white via-white/50 to-transparent z-0" />
+                         
+                         {/* Close Button Background for visibility */}
+                         <div className="absolute top-4 right-4 z-20">
+                             <button
+                                onClick={() => setSelectedStory(null)}
+                                className="p-2 rounded-full bg-black/40 hover:bg-black/60 text-white transition-colors backdrop-blur-sm"
+                             >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                             </button>
+                         </div>
+                    </>
+                 )}
+
+                 {!selectedStory.coverImage && (
+                     <button 
+                        onClick={() => setSelectedStory(null)}
+                        className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                     >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                     </button>
+                 )}
+                 
+                 <div className="relative z-10 flex flex-col justify-end h-full">
+                    <h2 className="text-2xl md:text-5xl font-black leading-tight mb-3 text-[#FF7B00] drop-shadow-[0_0_2px_rgba(255,255,255,1)] drop-shadow-[0_0_4px_rgba(255,255,255,1)]">
+                        {selectedStory.title || "(No Title)"}
+                    </h2>
+                    
+                    <div className="flex flex-wrap gap-2 mb-3">
+                        {selectedStory.genres && selectedStory.genres.map(genre => (
+                            <span key={genre} className="text-xs font-bold text-white bg-[#FF7B00] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                                {genre}
+                            </span>
+                        ))}
+                    </div>
+
+                    <p className="text-gray-600 font-medium text-xs md:text-sm">
+                        Created on {selectedStory.createdAt ? new Date(selectedStory.createdAt.seconds * 1000).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Just now'}
+                    </p>
+                 </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Premise</h3>
+                  <p className="text-gray-700 leading-relaxed text-xs md:text-lg whitespace-pre-wrap">
+                      {selectedStory.initialPrompt}
+                  </p>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                  <button
+                     onClick={() => setSelectedStory(null)}
+                     className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors"
+                  >
+                     Close
+                  </button>
+                  <button
+                     onClick={enterChat}
+                     className="px-8 py-3 rounded-xl font-bold text-white bg-[#FF7B00] hover:bg-[#e06c00] transition-colors shadow-lg hover:shadow-xl flex items-center gap-2"
+                  >
+                     <span>Enter Chat</span>
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                     </svg>
+                  </button>
+              </div>
+           </div>
+        </div>
+       )}
 
        {/* Delete Confirmation Modal */}
        {storyToDelete && (

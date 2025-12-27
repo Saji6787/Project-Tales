@@ -10,27 +10,19 @@ export default function CreateStoryPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [firstMessage, setFirstMessage] = useState(""); // Custom first message
   const [storyStyle, setStoryStyle] = useState(""); // Story Style state
   const [genres, setGenres] = useState([]); // Array of selected genres
+  
+  // Cover Image State
+  const [coverImage, setCoverImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPremise, setIsGeneratingPremise] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false); // Mobile genre modal state
   const textareaRef = useRef(null); // Ref for auto-expanding textarea
-  
-  // Auto-resize textarea when prompt changes
-  useEffect(() => {
-    if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto'; // Reset height
-        textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'; // Set to scrollHeight
-    }
-  }, [prompt]);
-  
-  // Assets State (Locations, Characters, Customs)
-  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
-  const [locations, setLocations] = useState([]);
-  const [characters, setCharacters] = useState([]);
-  const [customs, setCustoms] = useState([]);
 
   const GENRE_LIST = [
     "Fantasy", "Sci-Fi", "Horror", "Mystery", "Romance", "Adventure", 
@@ -41,6 +33,22 @@ export default function CreateStoryPage() {
     "Biopunk", "Steampunk", "Renaissance", "Political", "Anti-hero", 
     "Samurai", "Corporate", "Mafia", "Monster", "Supernatural", "Drama"
   ].sort();
+
+  // Assets State (Locations, Characters, Customs)
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [characters, setCharacters] = useState([]);
+  const [customs, setCustoms] = useState([]);
+
+  // ... (keeping existing refs/effects)
+  
+  // Auto-resize textarea when prompt changes
+  useEffect(() => {
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'; // Reset height
+        textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'; // Set to scrollHeight
+    }
+  }, [prompt]);
 
   const toggleGenre = (genre) => {
     setGenres(prev => 
@@ -65,6 +73,60 @@ export default function CreateStoryPage() {
     setter(newList);
   };
 
+  // Helper: Compress Image to Base64 (Max 800px width, 0.7 quality)
+  const compressImage = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; // Resize to max 800px width
+                    const scaleSize = MAX_WIDTH / img.width;
+                    
+                    if (img.width > MAX_WIDTH) {
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+                    } else {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                    }
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // Compress to JPEG with 0.7 quality to keep under Firestore 1MB limit
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl);
+                };
+                img.onerror = (error) => reject(error);
+            };
+            reader.onerror = (error) => reject(error);
+        });
+    };
+
+  // Handle Image Selection
+  const handleImageChange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+          if (file.size > 5 * 1024 * 1024) { // 5MB limit check before compression
+              alert("Image size should be less than 5MB");
+              return;
+          }
+          
+          try {
+            const compressedBase64 = await compressImage(file);
+            setCoverImage(compressedBase64); // Save the Base64 string directly
+            setPreviewUrl(compressedBase64);
+          } catch (error) {
+              console.error("Error compressing image:", error);
+              alert("Failed to process image.");
+          }
+      }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!user) return;
@@ -75,35 +137,70 @@ export default function CreateStoryPage() {
     setIsGenerating(true);
 
     try {
-      // 1. Create document
-      const storyId = await createStory(user.uid, title, prompt, genres, storyStyle);
+      // 1. Create document (pass coverImage Base64 directly and assets)
+      const storyId = await createStory(user.uid, title, prompt, genres, storyStyle, coverImage, { locations, characters, customs });
 
-      // 2. Generate Intro
-      const token = await user.getIdToken();
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-             token, 
-             initialPrompt: prompt,
-             genres,
-             style: storyStyle, // Pass style to generate API
-             locations,
-             characters,
-             customs,
-             history: [] 
-        }),
-      });
-      const data = await res.json();
+      let aiTurn = null;
 
-      if (data.error) throw new Error(data.error);
+      if (firstMessage.trim()) {
+           // A. Use Custom First Message
+           const initialHistory = [{
+               role: "ai",
+               content: firstMessage,
+               choices: []
+           }];
+
+           // Generate choices for this custom message
+           const token = await user.getIdToken();
+           const res = await fetch("/api/regenerate-choices", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    token, 
+                    history: initialHistory,
+                    initialPrompt: prompt,
+                    genres,
+                    style: storyStyle
+                }),
+           });
+           const data = await res.json();
+           if (data.error) throw new Error(data.error);
+           
+           aiTurn = {
+               ...initialHistory[0],
+               choices: data.choices || []
+           };
+
+      } else {
+           // B. Generate Intro normally
+           const token = await user.getIdToken();
+           const res = await fetch("/api/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    token, 
+                    initialPrompt: prompt,
+                    genres,
+                    style: storyStyle, 
+                    locations,
+                    characters,
+                    customs,
+                    history: [] 
+                }),
+           });
+           const data = await res.json();
+           if (data.error) throw new Error(data.error);
+
+           aiTurn = {
+               role: "ai",
+               content: data.story,
+               choices: data.choices || [],
+               chapterMetadata: data.chapter || null
+           };
+      }
 
       // 3. Save Intro to history
-      await updateStoryHistory(user.uid, storyId, {
-          role: "ai",
-          content: data.story,
-          choices: data.choices || []
-      });
+      await updateStoryHistory(user.uid, storyId, aiTurn);
 
       router.push(`/story/${storyId}`);
 
@@ -249,6 +346,39 @@ export default function CreateStoryPage() {
              />
            </div>
 
+           {/* Cover Image Upload */}
+           <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Cover Image (Optional)</label>
+              <div className="flex items-center gap-4">
+                  {previewUrl && (
+                      <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-md border border-gray-200">
+                          <img src={previewUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                      </div>
+                  )}
+                  <label className="cursor-pointer flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white text-sm font-medium text-gray-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                      </svg>
+                      {coverImage ? "Change Image" : "Upload Cover"}
+                      <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageChange}
+                          className="hidden"
+                      />
+                  </label>
+                  {coverImage && (
+                      <button 
+                        type="button"
+                        onClick={() => { setCoverImage(null); setPreviewUrl(null); }}
+                        className="text-xs text-red-500 font-bold hover:underline"
+                      >
+                          Remove
+                      </button>
+                  )}
+              </div>
+           </div>
+
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Genres (Select at least one)</label>
               
@@ -357,6 +487,18 @@ export default function CreateStoryPage() {
                     </button>
                 )}
               </div>
+            </div>
+
+            {/* First Message Input */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">First Message (Optional)</label>
+              <p className="text-xs text-gray-400 mb-2">If filled, this will be the starting narration of the story (AI won&apos;t generate an intro).</p>
+              <textarea 
+                value={firstMessage}
+                onChange={(e) => setFirstMessage(e.target.value)}
+                className="w-full p-3 md:p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-800 placeholder-gray-400 resize-none h-28"
+                placeholder="e.g. You wake up in a cold, dark cell. The air smells of rust and old blood..."
+              />
             </div>
 
             <div>

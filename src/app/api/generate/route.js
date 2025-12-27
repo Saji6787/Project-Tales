@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { history, initialPrompt, genres, token, locations, characters, customs, style } = await req.json();
+    const { history, initialPrompt, genres, token, locations, characters, customs, style, currentChapter } = await req.json();
 
     // 1. Validate Auth
     let userId = null;
@@ -61,7 +61,39 @@ export async function POST(req) {
         8. PERINGATAN KERAS: JANGAN MENGULANG kalimat, paragraf, atau plot yang sudah terjadi di 'Story History'.
         9. JANGAN memulai respon dengan merangkum kejadian terakhir. LANGSUNG ke aksi/konsekuensi berikutnya.
         ${assetsPrompt}
+        
+        CONTEXT: Saat ini cerita berada di Chapter ${currentChapter || 1}.
+        ATURAN BAB/CHAPTER:
+        ${(!history || history.length === 0) ? `- JIKA INI ADALAH AWAL CERITA (Response pertama dari premis), KAMU WAJIB MEMULAI DENGAN:
+          ### CHAPTER 1: [Judul Bab yang Relevan]` : ''}
+        ${(() => {
+            // Count turns since last chapter
+            let turnsSinceLastChapter = 0;
+            if (history && history.length > 0) {
+                 for (let i = history.length - 1; i >= 0; i--) {
+                    if (history[i].content && history[i].content.includes("### CHAPTER")) {
+                        break;
+                    }
+                    if (history[i].role === 'ai') turnsSinceLastChapter++;
+                 }
+            }
+            
+            if (turnsSinceLastChapter < 10) {
+                return `- SAAT INI JANGAN BUAT CHAPTER BARU. Fokus lanjutkan cerita.`;
+            } else if (turnsSinceLastChapter >= 10 && turnsSinceLastChapter < 18) {
+                return `- OPSI CHAPTER BARU: Jika momen pas, kamu BOLEH memulai Chapter baru dengan tag: ### CHAPTER [N]: [Judul]`;
+            } else {
+                return `- WAJIB CHAPTER BARU: Cerita sudah cukup panjang. Kamu HARUS mengakhiri adegan ini dan memulai Chapter baru di respon ini dengan tag: ### CHAPTER [N]: [Judul]`;
+            }
+        })()}
+
+        - Jika membuat chapter baru, gunakan format:
+          ### CHAPTER [Nomor]: [Judul Bab]
+          [Narasi Chapter Baru...]
+        - Jangan gunakan tag ini jika hanya melanjutkan adegan biasa (kecuali diperintahkan di atas).
+        
         Format response HARUS:
+           (Tag Chapter jika perlu)
            [Narasi Cerita]
            
            Choices:
@@ -92,6 +124,7 @@ export async function POST(req) {
     
     let story = text;
     let choices = [];
+    let chapterMetadata = null;
 
     if (match) {
         // Story is everything before the match
@@ -107,7 +140,24 @@ export async function POST(req) {
         }
     }
 
-    return NextResponse.json({ story, choices });
+    // Check for Chapter Tag
+    const chapterRegex = /###\s*CHAPTER\s*(\d+)\s*:\s*(.+)/i;
+    const chapterMatch = story.match(chapterRegex);
+
+    if (chapterMatch) {
+        const chapterNum = parseInt(chapterMatch[1]);
+        const chapterTitle = chapterMatch[2].trim();
+        
+        chapterMetadata = {
+            number: chapterNum,
+            title: chapterTitle
+        };
+
+        // Remove the tag from the story text to prevent double rendering
+        story = story.replace(chapterMatch[0], "").trim();
+    }
+
+    return NextResponse.json({ story, choices, chapter: chapterMetadata });
 
   } catch (error) {
     console.error("Generate error:", error);
