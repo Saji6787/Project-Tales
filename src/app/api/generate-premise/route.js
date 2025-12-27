@@ -41,7 +41,8 @@ export async function POST(req) {
         - Do NOT include any choices.
         - Do NOT include "Title:" or "Premise:".
         - Just output the raw story starter text.
-        - Use the same language as the Title (e.g. Indonesian title -> Indonesian premise).`),
+        - CRITICAL: Detect the language of the provided 'Story Title' and WRITE THE PREMISE IN THAT EXACT SAME LANGUAGE.
+        - Example: If Title is Indonesian, write Premise in Indonesian. If Title is English, write in English.`),
         new HumanMessage(`Story Title: ${title}`),
     ];
 

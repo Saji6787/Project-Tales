@@ -1,12 +1,13 @@
 import { db } from "./config";
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, arrayUnion } from "firebase/firestore";
 
-export const createStory = async (userId, title, initialPrompt, genres) => {
+export const createStory = async (userId, title, initialPrompt, genres, storyStyle) => {
   const colRef = collection(db, "users", userId, "stories");
   const docRef = await addDoc(colRef, {
     title,
     initialPrompt,
     genres, // Save genres
+    storyStyle, // Save story style
     createdAt: serverTimestamp(),
     history: [], // Stores conversation history
   });

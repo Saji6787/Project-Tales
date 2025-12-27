@@ -37,7 +37,8 @@ export async function POST(req) {
         Important:
         - Output ONLY the "Choices" section.
         - Do NOT include any story narrative.
-        - Choices MUST be in ENGLISH.
+        - Detect the language of the 'Story History' (specifically the last AI message).
+        - Write the NEW choices in that EXACT SAME language.
         - Genre contexts: ${genres ? genres.join(", ") : "Any"}
         
         Format:

@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { text, genres, token } = await req.json();
+    const { text, genres, title, token } = await req.json();
 
     // 1. Validate Auth
     if (token && adminAuth) {
@@ -44,6 +44,9 @@ export async function POST(req) {
         - Fix any grammar issues.
         - Target length: 1 paragraph (approx 3-5 sentences).
         - Genres context: ${genres ? genres.join(", ") : "General"}
+        - CRITICAL: Detect the language of the provided 'Story Title' (${title}) AND the 'Original Premise'.
+        - WRITE THE ENHANCED VERSION IN THAT SAME LANGUAGE. 
+        - If the Title is in Indonesian, the Output MUST be in Indonesian, even if the premise is mixed/broken.
         - Output ONLY the enhanced text. Do not add quotes or "Here is the enhanced version:".`),
         new HumanMessage(`Original Premise: ${text}`),
     ];

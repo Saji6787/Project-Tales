@@ -51,7 +51,8 @@ export default function StoryPage() {
         body: JSON.stringify({ 
            token, 
            history: newHistory,
-           initialPrompt: story.initialPrompt 
+           initialPrompt: story.initialPrompt,
+           style: story.storyStyle // Pass style 
         }),
       });
       
@@ -95,7 +96,10 @@ export default function StoryPage() {
                  token,
                  history: historyContext,
                  initialPrompt: story.initialPrompt,
-                 genres: story.genres
+                 history: historyContext,
+                 initialPrompt: story.initialPrompt,
+                 genres: story.genres,
+                 style: story.storyStyle // Pass style
              })
         });
         
@@ -201,7 +205,10 @@ export default function StoryPage() {
                   token,
                   history: newHistoryContext,
                   initialPrompt: story.initialPrompt,
-                  genres: story.genres
+                  history: newHistoryContext,
+                  initialPrompt: story.initialPrompt,
+                  genres: story.genres,
+                  style: story.storyStyle // Pass style
               })
           });
           
@@ -240,7 +247,10 @@ export default function StoryPage() {
                 token,
                 history: story.history,
                 initialPrompt: story.initialPrompt,
-                genres: story.genres
+                history: story.history,
+                initialPrompt: story.initialPrompt,
+                genres: story.genres,
+                style: story.storyStyle // Pass style
             })
         });
         const data = await res.json();

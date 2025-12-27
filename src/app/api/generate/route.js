@@ -5,7 +5,7 @@ import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { history, initialPrompt, genres, token, locations, characters, customs } = await req.json();
+    const { history, initialPrompt, genres, token, locations, characters, customs, style } = await req.json();
 
     // 1. Validate Auth
     let userId = null;
@@ -54,8 +54,12 @@ export async function POST(req) {
         1. Lanjutkan cerita berdasarkan input player dan histori.
         2. Buat narasi 150-250 kata yang immersif, deskriptif, dan menarik.
         3. Di akhir, berikan TEPAT 3-5 pilihan aksi untuk player.
-        4. PENTING: Narasi cerita menyesuaikan dengan bahasa input player (Indonesia/Inggris). TETAPI, Pilihan (Choices) WAJIB SELALU dalam BAHASA INGGRIS.
-        5. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
+        4. PENTING: Deteksi bahasa dari 'Initial Premise' atau 'Story History' sebelumnya. Gunakan bahasa TERSEBUT untuk seluruh narasi DAN pilihan (Choices).
+        5. KONSISTENSI BAHASA: Jika cerita dimulai dalam Bahasa Indonesia, LANJUTKAN dalam Bahasa Indonesia, bahkan jika player mengetik aksi custom dalam bahasa lain (misal: Inggris). Jangan ganti bahasa di tengah-tengah.
+        6. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
+        7. Gaya Penulisan/Story Style: ${style || "Standard/Adaptive"}. Ikuti gaya ini dalam penulisan narasi.
+        8. PERINGATAN KERAS: JANGAN MENGULANG kalimat, paragraf, atau plot yang sudah terjadi di 'Story History'.
+        9. JANGAN memulai respon dengan merangkum kejadian terakhir. LANGSUNG ke aksi/konsekuensi berikutnya.
         ${assetsPrompt}
         Format response HARUS:
            [Narasi Cerita]

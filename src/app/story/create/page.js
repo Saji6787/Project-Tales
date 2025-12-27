@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/firebase/auth";
 import { createStory, updateStoryHistory } from "@/lib/firebase/firestore";
 import { useRouter } from "next/navigation";
@@ -10,10 +10,21 @@ export default function CreateStoryPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [storyStyle, setStoryStyle] = useState(""); // Story Style state
   const [genres, setGenres] = useState([]); // Array of selected genres
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPremise, setIsGeneratingPremise] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isGenreModalOpen, setIsGenreModalOpen] = useState(false); // Mobile genre modal state
+  const textareaRef = useRef(null); // Ref for auto-expanding textarea
+  
+  // Auto-resize textarea when prompt changes
+  useEffect(() => {
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'; // Reset height
+        textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'; // Set to scrollHeight
+    }
+  }, [prompt]);
   
   // Assets State (Locations, Characters, Customs)
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
@@ -26,9 +37,10 @@ export default function CreateStoryPage() {
     "Historical", "Slice of Life", "Isekai", "Psychological", "Alternate History", 
     "Superhero", "Cyberpunk", "Medieval", "Space", "Post-Apocalyptic", 
     "School", "Comedy", "Time Travel", "Military", "Grimdark", "Mecha", 
-    "Villain Protagonist", "Anti-villain", "Regional Folklore", "Dungeon", 
-    "Biopunk", "Steampunk", "Renaissance"
-  ];
+    "Villain Protagonist", "Criminal", "Regional Folklore", "Dungeon", 
+    "Biopunk", "Steampunk", "Renaissance", "Political", "Anti-hero", 
+    "Samurai", "Corporate", "Mafia", "Monster", "Supernatural", "Drama"
+  ].sort();
 
   const toggleGenre = (genre) => {
     setGenres(prev => 
@@ -64,7 +76,7 @@ export default function CreateStoryPage() {
 
     try {
       // 1. Create document
-      const storyId = await createStory(user.uid, title, prompt, genres);
+      const storyId = await createStory(user.uid, title, prompt, genres, storyStyle);
 
       // 2. Generate Intro
       const token = await user.getIdToken();
@@ -75,6 +87,7 @@ export default function CreateStoryPage() {
              token, 
              initialPrompt: prompt,
              genres,
+             style: storyStyle, // Pass style to generate API
              locations,
              characters,
              customs,
@@ -142,7 +155,7 @@ export default function CreateStoryPage() {
         const res = await fetch("/api/enhance-premise", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: prompt, genres, token }),
+            body: JSON.stringify({ text: prompt, genres, title, token }),
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -238,13 +251,15 @@ export default function CreateStoryPage() {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Genres (Select at least one)</label>
-              <div className="grid grid-rows-2 grid-flow-col auto-cols-max overflow-x-auto pb-4 -mx-5 px-5 md:flex md:flex-wrap md:overflow-visible md:pb-0 md:mx-0 md:px-0 gap-2 custom-scrollbar snap-x no-scrollbar">
+              
+              {/* Desktop View: Full List */}
+              <div className="hidden md:flex flex-wrap gap-2">
                 {GENRE_LIST.map(genre => (
                   <button
                     key={genre}
                     type="button"
                     onClick={() => toggleGenre(genre)}
-                    className={`shrink-0 snap-start px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
                       genres.includes(genre) 
                         ? "bg-[#FF7B00] text-white shadow-md transform scale-105" 
                         : "bg-gray-100 text-gray-500 hover:bg-gray-200"
@@ -254,6 +269,36 @@ export default function CreateStoryPage() {
                   </button>
                 ))}
               </div>
+
+               {/* Mobile View: Select Button & Selected Tags */}
+               <div className="md:hidden">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {genres.map(genre => (
+                        <span key={genre} className="bg-[#FF7B00] text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                            {genre}
+                            <button 
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleGenre(genre); }}
+                                className="ml-1 hover:text-white/80"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                </svg>
+                            </button>
+                        </span>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsGenreModalOpen(true)}
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold text-sm hover:border-[#FF7B00] hover:text-[#FF7B00] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Select Genres
+                  </button>
+               </div>
             </div>
 
              <div>
@@ -282,12 +327,9 @@ export default function CreateStoryPage() {
               
               <div className="relative">
                 <textarea 
+                  ref={textareaRef}
                   value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = e.target.scrollHeight + 'px';
-                  }}
+                  onChange={(e) => setPrompt(e.target.value)}
                   style={{ minHeight: '160px' }}
                   className="w-full p-3 md:p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-800 placeholder-gray-400 resize-none overflow-hidden pb-12"
                   required
@@ -315,6 +357,16 @@ export default function CreateStoryPage() {
                     </button>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Story Style (Optional)</label>
+              <textarea 
+                value={storyStyle}
+                onChange={(e) => setStoryStyle(e.target.value)}
+                className="w-full p-3 md:p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF7B00]/20 focus:border-[#FF7B00] outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-800 placeholder-gray-400 resize-none h-20"
+                placeholder="e.g. Dark and gritty, Humorous, First-person perspective, Minimalist..."
+              />
             </div>
             
             {/* Assets (Formerly Advance Settings) */}
@@ -367,6 +419,56 @@ export default function CreateStoryPage() {
            </button>
          </form>
       </div>
+
+      {/* Mobile Genre Selection Modal */}
+      {isGenreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+             <div 
+                className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+             >
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-[#0A0A0A]">Select Genres</h3>
+                    <button 
+                        onClick={() => setIsGenreModalOpen(false)}
+                        className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-500">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar -mx-2 px-2">
+                    <div className="flex flex-wrap gap-2 pb-4">
+                         {GENRE_LIST.map(genre => (
+                              <button
+                                key={genre}
+                                type="button"
+                                onClick={() => toggleGenre(genre)}
+                                className={`px-3 py-2 rounded-lg text-xs font-bold transition-all grow text-center ${
+                                  genres.includes(genre) 
+                                    ? "bg-[#FF7B00] text-white shadow-md ring-2 ring-[#FF7B00]/20" 
+                                    : "bg-gray-50 text-gray-600 border border-gray-100 hover:bg-gray-100"
+                                }`}
+                              >
+                                {genre}
+                              </button>
+                         ))}
+                    </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 mt-2">
+                    <button
+                        onClick={() => setIsGenreModalOpen(false)}
+                        className="w-full bg-[#0A0A0A] text-white py-3 rounded-xl font-bold text-lg shadow-lg active:scale-[0.98] transition-transform"
+                    >
+                        Done ({genres.length} selected)
+                    </button>
+                </div>
+             </div>
+        </div>
+      )}
     </div>
   );
 }
