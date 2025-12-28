@@ -58,8 +58,11 @@ export async function POST(req) {
         5. KONSISTENSI BAHASA: Jika cerita dimulai dalam Bahasa Indonesia, LANJUTKAN dalam Bahasa Indonesia, bahkan jika player mengetik aksi custom dalam bahasa lain (misal: Inggris). Jangan ganti bahasa di tengah-tengah.
         6. Genre cerita ini adalah: ${genres ? genres.join(", ") : "Bebas"}. Pastikan narasi dan tone sesuai dengan genre tersebut.
         7. Gaya Penulisan/Story Style: ${style || "Standard/Adaptive"}. Ikuti gaya ini dalam penulisan narasi.
-        8. PERINGATAN KERAS: JANGAN MENGULANG kalimat, paragraf, atau plot yang sudah terjadi di 'Story History'.
-        9. JANGAN memulai respon dengan merangkum kejadian terakhir. LANGSUNG ke aksi/konsekuensi berikutnya.
+        8. PERINGATAN KERAS TENTANG PENGULANGAN: 
+           - DILARANG KERAS mengulang kalimat, frasa, atau deskripsi yang SAMA PERSIS dengan 2-3 respon terakhir di 'Story History'.
+           - Variasikan struktur kalimat (SPOK). Jangan memulai setiap kalimat dengan "Kamu..." atau nama karakter.
+           - Jika sebelumnya sudah dideskripsikan suatu hal, JANGAN deskripsikan ulang dengan kata-kata yang sama. Lanjutkan plotnya.
+        9. JANGAN memulai respon dengan merangkum kejadian terakhir (misal: "Setelah...", "Melihat hal itu..."). LANGSUNG ke aksi/konsekuensi berikutnya.
         ${assetsPrompt}
         
         CONTEXT: Saat ini cerita berada di Chapter ${currentChapter || 1}.

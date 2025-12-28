@@ -32,7 +32,7 @@ export async function POST(req) {
     // 3. Construct Prompt
     const messages = [
         new SystemMessage(`You are a Game Master.
-        Task: Provide 3-5 NEW and DIFFERENT choices for the player based on the story history.
+        Task: Provide EXACTLY 3 NEW and DIFFERENT choices for the player based on the story history.
         
         Important:
         - Output ONLY the "Choices" section.
@@ -45,7 +45,7 @@ export async function POST(req) {
         Choices:
         1. [Option 1]
         2. [Option 2]
-        ...`),
+        3. [Option 3]`),
     ];
 
     if (initialPrompt && (!history || history.length === 0)) {
