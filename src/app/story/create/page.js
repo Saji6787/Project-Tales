@@ -31,7 +31,8 @@ export default function CreateStoryPage() {
     "School", "Comedy", "Time Travel", "Military", "Grimdark", "Mecha", 
     "Villain Protagonist", "Criminal", "Regional Folklore", "Dungeon", 
     "Biopunk", "Steampunk", "Renaissance", "Political", "Anti-hero", 
-    "Samurai", "Corporate", "Mafia", "Monster", "Supernatural", "Drama"
+    "Samurai", "Corporate", "Mafia", "Monster", "Supernatural", "Drama",
+    "Action", "Culinary", "Alien", "Prison"
   ].sort();
 
   // Assets State (Locations, Characters, Customs)
