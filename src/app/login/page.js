@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [error, setError] = useState("");
-  const { login, register, resetPassword } = useAuth();
+  const { login, loginWithGoogle, register, resetPassword } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e) => {
@@ -165,6 +165,39 @@ export default function LoginPage() {
           </button>
 
         </form>
+        )}
+
+        {/* Divider */}
+        {!isForgotPassword && (
+             <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-400">Or continue with</span>
+                </div>
+            </div>
+        )}
+
+        {/* Google Sign In Button */}
+        {!isForgotPassword && (
+            <button
+                type="button"
+                onClick={async () => {
+                    setError("");
+                    try {
+                        await loginWithGoogle();
+                        router.push("/");
+                    } catch (err) {
+                        console.error("Google Login Error:", err);
+                        setError("Failed to sign in with Google.");
+                    }
+                }}
+                className="w-full bg-white text-gray-700 border border-gray-300 py-3 rounded-xl font-bold text-lg hover:bg-gray-50 transition shadow-sm hover:shadow-md active:scale-[0.98] transform duration-200 cursor-pointer flex items-center justify-center gap-3"
+            >
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-6 h-6" />
+                Sign in with Google
+            </button>
         )}
 
         <div className="mt-8 text-center">
