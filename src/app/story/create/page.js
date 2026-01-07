@@ -59,7 +59,7 @@ export default function CreateStoryPage() {
 
   // Helper to manage asset lists
   const addAsset = (setter, list) => {
-    if (list.length < 5) {
+    if (list.length < 10) {
       setter([...list, { name: "", description: "" }]);
     }
   };
@@ -267,6 +267,12 @@ export default function CreateStoryPage() {
     }
   };
 
+  // Helper: Auto-expand textarea
+  const adjustTextareaHeight = (e) => {
+    e.target.style.height = 'auto';
+    e.target.style.height = e.target.scrollHeight + 'px';
+  };
+
   // Render helper for asset section
   const renderAssetSection = (title, list, setter) => (
     <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
@@ -297,15 +303,18 @@ export default function CreateStoryPage() {
                         <textarea
                             placeholder="Description"
                             value={item.description}
-                            onChange={(e) => updateAsset(setter, list, index, 'description', e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF7B00]/10 focus:border-[#FF7B00]/50 resize-none h-16"
+                            onChange={(e) => {
+                                updateAsset(setter, list, index, 'description', e.target.value);
+                                adjustTextareaHeight(e);
+                            }}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF7B00]/10 focus:border-[#FF7B00]/50 resize-none min-h-[4rem] overflow-hidden"
                         />
                     </div>
                 </div>
             ))}
         </div>
         
-        {list.length < 5 && (
+        {list.length < 10 && (
             <button
                 type="button"
                 onClick={() => addAsset(setter, list)}
@@ -534,7 +543,7 @@ export default function CreateStoryPage() {
 
                 <div
                     className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                        isAssetsOpen ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0'
+                        isAssetsOpen ? 'max-h-[8000px] opacity-100' : 'max-h-0 opacity-0'
                     }`}
                 >
                     <div className="p-4 space-y-6">
