@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
-import { getStory, saveSlot, getSaves, deleteSaveSlot, loadSave } from "@/lib/firebase/firestore";
+import { getStory, saveSlot, getSaves, deleteSaveSlot, loadSave, getPersonas, updateStory } from "@/lib/firebase/firestore";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -21,6 +21,10 @@ export default function Navbar() {
   const [loadingSaves, setLoadingSaves] = useState(false);
   const [processingSave, setProcessingSave] = useState(null); // processing slot index
   const [saveMessage, setSaveMessage] = useState(""); // Notification message
+  
+  // Persona Tab State
+  const [personas, setPersonas] = useState([]);
+  const [activePersonaId, setActivePersonaId] = useState(null);
   
   // Confirmation Modal State
   const [confirmation, setConfirmation] = useState({
@@ -144,6 +148,49 @@ export default function Navbar() {
           console.error("Confirmation action failed:", error);
           alert("Action failed: " + error.message); // Fallback alert for deeper errors
           closeConfirmation();
+      }
+  };
+
+  const fetchPersonasForModal = async () => {
+        if (!user) return;
+        try {
+            const fetchedPersonas = await getPersonas(user.uid);
+            setPersonas(fetchedPersonas);
+            
+            // Set active persona if story has one, otherwise try to find default
+            // Assuming storyInfo might have `activePersonaId` in future updates
+            // For now, let's look for default one from the list if story doesn't specify
+            if (storyInfo?.activePersonaId) {
+                setActivePersonaId(storyInfo.activePersonaId);
+            } else {
+                 const defaultPersona = fetchedPersonas.find(p => p.isDefault);
+                 if (defaultPersona) setActivePersonaId(defaultPersona.id);
+            }
+        } catch (error) {
+            console.error("Failed to fetch personas", error);
+        }
+  };
+
+  useEffect(() => {
+      // If modal is open and tab is persona, fetch
+      if (showInfoModal && activeTab === "persona") {
+          fetchPersonasForModal();
+      }
+  }, [showInfoModal, activeTab, storyInfo?.id]); // Re-fetch if story changes or modal opens
+
+  const handleSetPersona = async (personaId) => {
+      if (!user || !storyInfo) return;
+      try {
+          // Optimistic update
+          setActivePersonaId(personaId);
+          
+          // Save to story
+          await updateStory(user.uid, storyInfo.id, { activePersonaId: personaId });
+          
+          // Also update local storyInfo state so it persists in the session
+          setStoryInfo(prev => ({ ...prev, activePersonaId: personaId }));
+      } catch (error) {
+          console.error("Failed to set persona", error);
       }
   };
 
@@ -281,10 +328,10 @@ export default function Navbar() {
                     setShowInfoModal(true);
                     setActiveTab("info");
                 }}
-                className="p-2 bg-white/40 text-[#FF7B00] border border-[#FF7B00]/20 rounded-lg hover:bg-[#FF7B00] hover:text-white transition-colors shadow-sm backdrop-blur-sm mr-2"
+                className="p-2 text-gray-600 hover:text-[#FF7B00] transition rounded-full hover:bg-orange-50"
                 title="Story Info"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                 </svg>
               </button>
@@ -299,32 +346,44 @@ export default function Navbar() {
                 </svg>
               </Link>
 
-              {/* Three Dots Menu */}
-              <div className="relative" ref={menuRef}>
-                <button 
-                  onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="p-2 text-gray-600 hover:text-gray-900 transition rounded-full hover:bg-gray-100 focus:outline-none cursor-pointer"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-                  </svg>
-                </button>
 
-                {/* Dropdown Content */}
-                {isMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 text-sm font-bold flex items-center gap-2 transition-colors"
+              {/* Persona Icon Button & Menu - HIDDEN IN CHAT (when storyInfo exists) */}
+              {!storyInfo && (
+                <>
+                  <Link href="/persona" className="p-2 text-gray-600 hover:text-[#FF7B00] transition rounded-full hover:bg-orange-50" title="Persona">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                    </svg>
+                  </Link>
+
+                  {/* Three Dots Menu */}
+                  <div className="relative" ref={menuRef}>
+                    <button 
+                      onClick={() => setIsMenuOpen(!isMenuOpen)}
+                      className="p-2 text-gray-600 hover:text-gray-900 transition rounded-full hover:bg-gray-100 focus:outline-none cursor-pointer"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
                       </svg>
-                      Logout
                     </button>
+
+                    {/* Dropdown Content */}
+                    {isMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 text-sm font-bold flex items-center gap-2 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                          </svg>
+                          Logout
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </>
           ) : (
             <Link href="/login" className="bg-[#FF7B00] text-white hover:bg-[#E06C00] px-4 py-1.5 rounded-full text-sm transition font-bold shadow-md">
@@ -378,6 +437,12 @@ export default function Navbar() {
                             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "saves" ? "bg-white text-[#FF7B00] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                          >
                             Save & Load
+                         </button>
+                         <button 
+                            onClick={() => setActiveTab("persona")}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "persona" ? "bg-white text-[#FF7B00] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                         >
+                            Persona
                          </button>
                      </div>
                  </div>
@@ -473,6 +538,61 @@ export default function Navbar() {
                                 Saving overwrites the selected slot. Loading replaces your current progress.
                             </p>
                         </div>
+                    )}
+
+                    {/* PERSONA TAB */}
+                    {activeTab === "persona" && (
+                         <div className="space-y-4 pt-2">
+                            {personas.length === 0 ? (
+                                <div className="text-center py-10 text-gray-400">
+                                    <p className="mb-2">No personas found.</p>
+                                    <Link href="/persona" onClick={() => setShowInfoModal(false)} className="text-[#FF7B00] hover:underline font-bold text-sm">
+                                        Create one here
+                                    </Link>
+                                </div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {personas.map(persona => (
+                                        <div 
+                                            key={persona.id}
+                                            onClick={() => handleSetPersona(persona.id)}
+                                            className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                                                activePersonaId === persona.id 
+                                                ? "bg-orange-50 border-[#FF7B00] shadow-sm ring-1 ring-[#FF7B00]" 
+                                                : "bg-white border-gray-200 hover:border-[#FF7B00]/50 hover:bg-gray-50"
+                                            }`}
+                                        >
+                                            <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0 border border-gray-100">
+                                                {persona.photoUrl ? (
+                                                    <img src={persona.photoUrl} alt={persona.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <h3 className={`text-sm font-bold truncate ${activePersonaId === persona.id ? "text-[#FF7B00]" : "text-gray-900"}`}>
+                                                        {persona.name}
+                                                    </h3>
+                                                    {activePersonaId === persona.id && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-[#FF7B00] text-white px-2 py-0.5 rounded-full">
+                                                            Active
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 line-clamp-1">
+                                                    {persona.description}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                         </div>
                     )}
 
                 </div>

@@ -41,8 +41,54 @@ export default function StoryPage() {
             // On subsequent updates (new messages), scroll smoothly to bottom to show generation
             bottomRef.current?.scrollIntoView({ behavior: "smooth" });
         }
+    } else if (story && story.history.length === 0 && !processing && !loading) {
+        // Auto-start if history is empty (and we're not loading/processing)
+        generateFirstMessage();
     }
-  }, [story?.history]);
+    
+    // Safety check: Mark initial load done once story is loaded
+    if (story && loading === false && isInitialLoad.current) {
+        isInitialLoad.current = false;
+    }
+  }, [story?.history, loading, processing]);
+
+  const generateFirstMessage = async () => {
+    if (processing || !user || !story) return;
+    setProcessing(true);
+    try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                token,
+                history: [], // Empty history
+                initialPrompt: story.initialPrompt,
+                genres: story.genres,
+                style: story.storyStyle,
+                currentChapter: 1
+            })
+        });
+        
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const aiTurn = {
+            role: "ai",
+            content: data.story,
+            choices: data.choices || [],
+            chapterMetadata: data.chapter || null
+        };
+        
+        const newHistory = [aiTurn];
+        setStory(prev => ({ ...prev, history: newHistory }));
+        await saveStoryHistory(user.uid, id, newHistory);
+    } catch (err) {
+        console.error("Failed to start story", err);
+    } finally {
+        setProcessing(false);
+    }
+  };
 
   // Helper to get current chapter number
   const getCurrentChapter = (historyData) => {
@@ -356,7 +402,7 @@ export default function StoryPage() {
             setStory(prev => {
                 const newHistory = [...prev.history];
                 const lastIdx = newHistory.length - 1;
-                if (newHistory[lastIdx].role === 'ai') {
+                if (lastIdx >= 0 && newHistory[lastIdx].role === 'ai') {
                     newHistory[lastIdx] = { ...newHistory[lastIdx], choices: data.choices };
                 }
                 return { ...prev, history: newHistory };
@@ -499,152 +545,298 @@ export default function StoryPage() {
       {/* LEFT: Chat Section */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth relative">
         <div className="max-w-3xl mx-auto space-y-6 pb-20">
-          <div className="border-b border-[#FF7B00]/20 pb-4 mb-8 text-center md:text-left">
-             <h1 className="text-3xl font-extrabold text-[#FF7B00] tracking-tight">{story.title}</h1>
-             <p className="text-sm font-bold text-[#FF7B00]/90 mt-2 italic text-justify leading-relaxed">{story.initialPrompt}</p>
+          <div className="relative w-full mb-8 min-h-[300px] flex flex-col justify-end group rounded-[2.5rem] overflow-hidden">
+              {/* Background Image */}
+              {story.coverImage ? (
+                  <>
+                      <div 
+                          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                          style={{ backgroundImage: `url(${story.coverImage})` }}
+                      />
+                      
+                      {/* Edge Fading (Blur effect) - Matching Page Background #FCF5EF */}
+                      <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#FCF5EF] to-transparent z-10" />
+                      <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#FCF5EF] to-transparent z-10" />
+                      <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-[#FCF5EF] to-transparent z-10" />
+                      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#FCF5EF] via-[#FCF5EF]/60 to-transparent z-0" />
+                  </>
+              ) : (
+                  <div className="absolute inset-0 bg-[#FF7B00]" />
+              )}
+              
+              {/* Content */}
+              <div className="relative z-20 p-6 md:p-10">
+                  <h1 className="text-4xl md:text-6xl font-black text-[#FF7B00] mb-4 tracking-tight leading-none drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]">
+                      {story.title}
+                  </h1>
+                  
+                  <div className="flex flex-wrap gap-2 mb-4">
+                      {/* Story Type Tag */}
+                      <span className="px-3 py-1 bg-white border border-[#FF7B00]/30 text-[#FF7B00] text-xs font-bold rounded-full uppercase tracking-wider shadow-sm">
+                          {story.type === 'character' ? 'Character' : 'Adventure'}
+                      </span>
+                      
+                      {/* Genre Tags */}
+                      {story.genres?.map((genre) => (
+                          <span key={genre} className="px-3 py-1 bg-[#FF7B00] text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-sm">
+                              {genre}
+                          </span>
+                      ))}
+                  </div>
+              </div>
           </div>
            
            {(() => {
              const lastPlayerIndex = story.history.reduce((last, turn, idx) => turn.role === 'player' ? idx : last, -1);
              
-             return story.history.map((turn, index) => (
-             <div key={index}>
-                {/* Chapter Divider */}
-                {turn.chapterMetadata && (
-                    <div className="flex items-center justify-center py-8 my-4">
-                        <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
-                        <div className="px-4 text-center">
-                            <span className="block text-xs font-bold text-[#FF7B00] uppercase tracking-widest mb-1">Chapter {turn.chapterMetadata.number}</span>
-                            <span className="block text-xl font-serif font-bold text-[#FF7B00]">{turn.chapterMetadata.title}</span>
-                        </div>
-                        <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
-                    </div>
-                )}
+             return story.history.map((turn, index) => { 
+                const isCharacterMode = story.type === 'character';
                 
-                <div 
-                    ref={index === story.history.length - 1 ? lastMessageRef : null}
-                    className={`flex items-end gap-2 ${turn.role === 'player' ? 'justify-end' : 'justify-start'}`}
-                >
-              {/* Retry Button for User (Only if last message and no AI response) */}
-              {turn.role === 'player' && index === story.history.length - 1 && !processing && (
-                  <button 
-                      onClick={handleRetryLastTurn}
-                      className="p-2 mb-2 rounded-full bg-gray-100 hover:bg-[#FF7B00]/10 text-gray-400 hover:text-[#FF7B00] transition-colors shadow-sm"
-                      title="Retry / Continue Story"
-                  >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                      </svg>
-                  </button>
-              )}
-              <div className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative ${
-                turn.role === 'player' 
-                  ? `bg-[#FF7B00] text-white rounded-br-none ${index === lastPlayerIndex ? 'mb-6 md:mb-0' : ''}` 
-                  : 'bg-white text-[#0A0A0A] border border-gray-100 rounded-bl-none'
-              }`}>
-                {/* Edit Form for User */}
-                {editingIndex === index ? (
-                    <div className="w-full min-w-[300px]">
-                        <textarea
-                            value={editContent}
-                            onChange={(e) => {
-                                setEditContent(e.target.value);
-                                e.target.style.height = 'auto';
-                                e.target.style.height = e.target.scrollHeight + 'px';
-                            }}
-                            className="w-full bg-white/20 text-white placeholder-white/60 p-2 rounded-lg outline-none resize-none overflow-hidden mb-2 border border-white/30"
-                            rows={1}
-                        />
-                        <div className="flex justify-end gap-2">
-                            <button 
-                                onClick={handleEditCancel}
-                                className="px-3 py-1 text-sm bg-black/20 hover:bg-black/30 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={() => handleEditSave(index)}
-                                className="px-3 py-1 text-sm bg-white text-[#FF7B00] font-bold rounded-lg hover:bg-gray-100 transition-colors"
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className={`prose prose-sm max-w-none ${
-                            turn.role === 'player' 
-                                ? 'prose-p:text-white prose-headings:text-white prose-strong:text-white prose-ul:text-white' 
-                                : 'prose-p:mb-4 last:prose-p:mb-0'
-                        }`}>
-                          <ReactMarkdown>{formatContent(turn.content)}</ReactMarkdown>
-                        </div>
-                        
-                        {/* User Edit Menu (3 dots) - Repositioned Below Bubble */}
-                        {turn.role === 'player' && !processing && index === lastPlayerIndex && (
-                            <div className="absolute top-full right-0 mt-2 z-10 transition-all duration-200 opacity-100 md:opacity-0 md:group-hover/bubble:opacity-100 translate-y-0">
-                                <button
-                                    onClick={() => handleEditStart(index, turn.content)}
-                                    className="px-3 py-1 bg-white shadow-md border border-gray-100 rounded-lg text-xs font-bold text-gray-500 hover:text-[#FF7B00] hover:bg-gray-50 transition-colors flex items-center gap-1"
-                                    title="Edit message"
-                                >
-                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
-                                     <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                                   </svg>
-                                   Edit
-                                </button>
+                return (
+                 <div key={index} className="w-full">
+                    {/* Chapter Divider */}
+                    {turn.chapterMetadata && (
+                        <div className="flex items-center justify-center py-8 my-4">
+                            <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
+                            <div className="px-4 text-center">
+                                <span className="block text-xs font-bold text-[#FF7B00] uppercase tracking-widest mb-1">Chapter {turn.chapterMetadata.number}</span>
+                                <span className="block text-xl font-serif font-bold text-[#FF7B00]">{turn.chapterMetadata.title}</span>
                             </div>
-                        )}
-                        
-                        {/* AI Controls: Reload & Version Nav */}
-                        {turn.role === 'ai' && !processing && (
-                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100/50">
-                                {/* Only show Regenerate if it's the latest message */}
-                                {index === story.history.length - 1 && (
-                                    <button 
-                                        onClick={() => handleRegenerate(index)}
-                                        title="Regenerate response"
-                                        className="p-1.5 text-gray-400 hover:text-[#FF7B00] hover:bg-orange-50 rounded-lg transition-colors"
-                                    >
-                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                         </svg>
-                                    </button>
+                            <div className="h-px bg-[#FF7B00]/30 w-16 md:w-32"></div>
+                        </div>
+                    )}
+
+                    {/* Character Mode Layout */}
+                    {isCharacterMode ? (
+                        <div 
+                            ref={index === story.history.length - 1 ? lastMessageRef : null}
+                            className={`flex gap-4 mb-6 ${turn.role === 'player' ? 'flex-row-reverse' : 'flex-row'}`}
+                        >
+                            {/* Avatar (AI Only) */}
+                            {turn.role === 'ai' && (
+                                <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-white shadow-sm bg-white">
+                                    {story.coverImage ? (
+                                        <img src={story.coverImage} alt={story.title} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-[#FF7B00] text-white font-bold text-lg">
+                                            {story.title?.[0]?.toUpperCase() || 'C'}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Content Column */}
+                            <div className={`flex flex-col max-w-[85%] md:max-w-[75%] ${turn.role === 'player' ? 'items-end' : 'items-start'}`}>
+                                {/* Name (AI Only) */}
+                                {turn.role === 'ai' && (
+                                    <span className="text-[#FF7B00] font-bold text-sm mb-1 ml-1">{story.title}</span>
                                 )}
+
+                                {/* Message Bubble/Card */}
+                                <div className={`p-4 md:p-5 text-base leading-relaxed shadow-sm relative group/bubble ${
+                                    turn.role === 'player' 
+                                        ? 'bg-[#FF7B00] text-white rounded-2xl rounded-tr-none' 
+                                        : 'bg-white text-black rounded-2xl rounded-tl-none border border-gray-100'
+                                }`}>
+                                     {editingIndex === index && turn.role === 'player' ? (
+                                         <div className="min-w-[250px]">
+                                             <textarea
+                                                 value={editContent}
+                                                 onChange={(e) => {
+                                                     setEditContent(e.target.value);
+                                                     e.target.style.height = 'auto';
+                                                     e.target.style.height = e.target.scrollHeight + 'px';
+                                                 }}
+                                                 className="w-full bg-white/20 text-white placeholder-white/60 p-2 rounded-lg outline-none resize-none overflow-hidden mb-2 border border-white/30"
+                                                 rows={1}
+                                             />
+                                             <div className="flex justify-end gap-2">
+                                                 <button onClick={handleEditCancel} className="px-3 py-1 text-xs bg-black/20 hover:bg-black/30 rounded-lg text-white">Cancel</button>
+                                                 <button onClick={() => handleEditSave(index)} className="px-3 py-1 text-xs bg-white text-[#FF7B00] font-bold rounded-lg hover:bg-gray-100">Save</button>
+                                             </div>
+                                         </div>
+                                     ) : (
+                                        <>
+                                            <div className="prose prose-sm max-w-none prose-p:mb-2 last:prose-p:mb-0">
+                                                <ReactMarkdown
+                                                    components={{
+                                                        p: ({node, ...props}) => <p className={turn.role === 'player' ? 'text-white' : 'text-black'} {...props} />
+                                                    }}
+                                                >
+                                                    {formatContent(turn.content)}
+                                                </ReactMarkdown>
+                                            </div>
+
+                                            {/* AI Controls (Regenerate & Version) */}
+                                            {turn.role === 'ai' && !processing && (
+                                                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/50 opacity-0 group-hover/bubble:opacity-100 transition-opacity duration-200">
+                                                     {index === story.history.length - 1 && (
+                                                        <button onClick={() => handleRegenerate(index)} title="Regenerate" className="p-1 text-gray-400 hover:text-[#FF7B00]">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                                                        </button>
+                                                     )}
+                                                     {turn.versions && turn.versions.length > 1 && (
+                                                        <div className="flex items-center gap-1 text-xs text-gray-400">
+                                                            <button onClick={() => handleSwitchVersion(index, 'prev')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0} className="hover:text-[#FF7B00] disabled:opacity-30">&lt;</button>
+                                                            <span>{(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1}/{turn.versions.length}</span>
+                                                            <button onClick={() => handleSwitchVersion(index, 'next')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1} className="hover:text-[#FF7B00] disabled:opacity-30">&gt;</button>
+                                                        </div>
+                                                     )}
+                                                </div>
+                                            )}
+                                        </>
+                                     )}
+
+                                     {/* User Edit Button (Hover) */}
+                                     {turn.role === 'player' && !processing && index === lastPlayerIndex && !editingIndex && (
+                                         <button 
+                                            onClick={() => handleEditStart(index, turn.content)} 
+                                            className="absolute -left-8 top-2 text-gray-300 hover:text-[#FF7B00] opacity-0 group-hover/bubble:opacity-100 transition-opacity"
+                                            title="Edit"
+                                         >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+                                         </button>
+                                     )}
+                                </div>
+                                {/* Retry (only for user last message) */}
+                                {turn.role === 'player' && index === story.history.length - 1 && !processing && (
+                                   <div className="flex justify-end mt-1">
+                                       <button onClick={handleRetryLastTurn} className="text-xs text-gray-400 hover:text-[#FF7B00] flex items-center gap-1">
+                                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                                           Retry
+                                       </button>
+                                   </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        // Adventure Mode Layout (Original)
+                        <div 
+                            ref={index === story.history.length - 1 ? lastMessageRef : null}
+                            className={`flex items-end gap-2 ${turn.role === 'player' ? 'justify-end' : 'justify-start'}`}
+                        >
+                    {/* Retry Button for User (Only if last message and no AI response) */}
+                    {turn.role === 'player' && index === story.history.length - 1 && !processing && (
+                        <button 
+                            onClick={handleRetryLastTurn}
+                            className="p-2 mb-2 rounded-full bg-gray-100 hover:bg-[#FF7B00]/10 text-gray-400 hover:text-[#FF7B00] transition-colors shadow-sm"
+                            title="Retry / Continue Story"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                        </button>
+                    )}
+                    <div className={`max-w-[85%] lg:max-w-[75%] p-5 rounded-2xl shadow-sm text-base leading-relaxed group/bubble relative ${
+                        turn.role === 'player' 
+                        ? `bg-[#FF7B00] text-white rounded-br-none ${index === lastPlayerIndex ? 'mb-6 md:mb-0' : ''}` 
+                        : 'bg-white text-[#0A0A0A] border border-gray-100 rounded-bl-none'
+                    }`}>
+                        {/* Edit Form for User */}
+                        {editingIndex === index ? (
+                            <div className="w-full min-w-[300px]">
+                                <textarea
+                                    value={editContent}
+                                    onChange={(e) => {
+                                        setEditContent(e.target.value);
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = e.target.scrollHeight + 'px';
+                                    }}
+                                    className="w-full bg-white/20 text-white placeholder-white/60 p-2 rounded-lg outline-none resize-none overflow-hidden mb-2 border border-white/30"
+                                    rows={1}
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button 
+                                        onClick={handleEditCancel}
+                                        className="px-3 py-1 text-sm bg-black/20 hover:bg-black/30 rounded-lg transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        onClick={() => handleEditSave(index)}
+                                        className="px-3 py-1 text-sm bg-white text-[#FF7B00] font-bold rounded-lg hover:bg-gray-100 transition-colors"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className={`prose prose-sm max-w-none ${
+                                    turn.role === 'player' 
+                                        ? 'prose-p:text-white prose-headings:text-white prose-strong:text-white prose-ul:text-white' 
+                                        : 'prose-p:mb-4 last:prose-p:mb-0'
+                                }`}>
+                                <ReactMarkdown>{formatContent(turn.content)}</ReactMarkdown>
+                                </div>
                                 
-                                {turn.versions && turn.versions.length > 1 && (
-                                    <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-0.5">
-                                        <button 
-                                            onClick={() => handleSwitchVersion(index, 'prev')}
-                                            disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0}
-                                            className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
+                                {/* User Edit Menu (3 dots) - Repositioned Below Bubble */}
+                                {turn.role === 'player' && !processing && index === lastPlayerIndex && (
+                                    <div className="absolute top-full right-0 mt-2 z-10 transition-all duration-200 opacity-100 md:opacity-0 md:group-hover/bubble:opacity-100 translate-y-0">
+                                        <button
+                                            onClick={() => handleEditStart(index, turn.content)}
+                                            className="px-3 py-1 bg-white shadow-md border border-gray-100 rounded-lg text-xs font-bold text-gray-500 hover:text-[#FF7B00] hover:bg-gray-50 transition-colors flex items-center gap-1"
+                                            title="Edit message"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                              <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                             </svg>
-                                        </button>
-                                        <span className="text-xs font-bold text-gray-500 min-w-[30px] text-center">
-                                            {(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1} / {turn.versions.length}
-                                        </span>
-                                        <button 
-                                            onClick={() => handleSwitchVersion(index, 'next')}
-                                            disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1}
-                                            className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                              <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-                                            </svg>
+                                            Edit
                                         </button>
                                     </div>
                                 )}
-                            </div>
+                                
+                                {/* AI Controls: Reload & Version Nav */}
+                                {turn.role === 'ai' && !processing && (
+                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100/50">
+                                        {/* Only show Regenerate if it's the latest message */}
+                                        {index === story.history.length - 1 && (
+                                            <button 
+                                                onClick={() => handleRegenerate(index)}
+                                                title="Regenerate response"
+                                                className="p-1.5 text-gray-400 hover:text-[#FF7B00] hover:bg-orange-50 rounded-lg transition-colors"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        
+                                        {turn.versions && turn.versions.length > 1 && (
+                                            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-0.5">
+                                                <button 
+                                                    onClick={() => handleSwitchVersion(index, 'prev')}
+                                                    disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0}
+                                                    className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                    <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                                <span className="text-xs font-bold text-gray-500 min-w-[30px] text-center">
+                                                    {(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1} / {turn.versions.length}
+                                                </span>
+                                                <button 
+                                                    onClick={() => handleSwitchVersion(index, 'next')}
+                                                    disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1}
+                                                    className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                    <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </>
                         )}
-                    </>
+                    </div>
+                </div>
                 )}
-              </div>
             </div>
-          </div>
-          ));
+            );
+        })
           })()}
 
           {/* Mobile Choices (Inline at bottom of chat) */}

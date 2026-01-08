@@ -1,7 +1,7 @@
 import { db } from "./config";
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, arrayUnion, setDoc } from "firebase/firestore";
 
-export const createStory = async (userId, title, initialPrompt, genres, storyStyle, coverImage = null, assets = {}) => {
+export const createStory = async (userId, title, initialPrompt, genres, storyStyle, coverImage = null, assets = {}, type = "story", additionalData = {}) => {
   const colRef = collection(db, "users", userId, "stories");
   const docRef = await addDoc(colRef, {
     title,
@@ -10,6 +10,8 @@ export const createStory = async (userId, title, initialPrompt, genres, storySty
     storyStyle, // Save story style
     coverImage, // Save cover image URL
     assets, // Save assets (locations, characters, customs)
+    type, // Save type (story or character)
+    ...additionalData, // Save additional data (e.g., definition)
     createdAt: serverTimestamp(),
     history: [], // Stores conversation history
   });
@@ -30,6 +32,11 @@ export const getStory = async (userId, storyId) => {
     return { id: snapshot.id, ...snapshot.data() };
   }
   return null;
+};
+
+export const updateStory = async (userId, storyId, updates) => {
+  const docRef = doc(db, "users", userId, "stories", storyId);
+  await updateDoc(docRef, updates);
 };
 
 export const updateStoryHistory = async (userId, storyId, newHistoryItem) => {
@@ -97,4 +104,48 @@ export const loadSave = async (userId, storyId, saveData) => {
         // We do NOT update 'title' or 'initialPrompt' usually as those are story identities,
         // but if the save contains them, it's fine. Main thing is history.
     });
+};
+
+// --- Persona System ---
+
+export const createPersona = async (userId, personaData) => {
+  const colRef = collection(db, "users", userId, "personas");
+  const docRef = await addDoc(colRef, {
+    ...personaData,
+    createdAt: serverTimestamp(),
+    isDefault: false 
+  });
+  return docRef.id;
+};
+
+export const getPersonas = async (userId) => {
+  const colRef = collection(db, "users", userId, "personas");
+  const q = query(colRef, orderBy("createdAt", "desc"));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const updatePersona = async (userId, personaId, updates) => {
+  const docRef = doc(db, "users", userId, "personas", personaId);
+  await updateDoc(docRef, updates);
+};
+
+export const deletePersona = async (userId, personaId) => {
+  const docRef = doc(db, "users", userId, "personas", personaId);
+  await deleteDoc(docRef);
+};
+
+export const setDefaultPersona = async (userId, personaId) => {
+  const colRef = collection(db, "users", userId, "personas");
+  const snapshot = await getDocs(colRef);
+  
+  const updates = snapshot.docs.map(d => {
+      const isDefault = d.id === personaId;
+      if (d.data().isDefault !== isDefault) {
+          return updateDoc(doc(db, "users", userId, "personas", d.id), { isDefault });
+      }
+      return Promise.resolve();
+  });
+  
+  await Promise.all(updates);
 };
