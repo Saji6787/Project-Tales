@@ -114,13 +114,18 @@ export async function POST(req) {
     }
 
     memoryInstructions = `
-        ATURAN MANAJEMEN INGATAN (PENTING):
-        - Kamu memiliki kemampuan untuk MENYIMPAN dan MENGHAPUS ingatan jangka panjang.
-        - JIKA terjadi peristiwa SANGAT PENTING (misal: nama terungkap, item kunci didapat, lokasi penting ditemukan, janji dibuat), tambahkan ingatan baru.
-        - Format tambah ingatan: Tulis [[MEMORY_ADD: Ringkasan Ingatan]] di akhir responmu (namun tersembunyi dari user).
-        - JIKA ingatan lama sudah tidak relevan/salah (misal: item hilang, status berubah), hapus ingatan tersebut.
-        - Format hapus ingatan: Tulis [[MEMORY_DELETE: NomorIngatan]] di akhir responmu.
-        - JANGAN abuse fitur ini. Hanya untuk info krusial yang harus diingat jangka panjang.
+        ATURAN MANAJEMEN INGATAN (PENTING & OTOMATIS):
+        - Kamu memiliki OTORITAS PENUH untuk menyimpan ingatan jangka panjang secara OTOMATIS tanpa bertanya.
+        - WAJIB TAMBAHKAN INGATAN BARU ([[MEMORY_ADD: ...]]) jika terjadi:
+          1. Fakta baru tentang user/player terungkap.
+          2. Janji atau kesepakatan penting dibuat.
+          3. Lokasi penting ditemukan atau diselesaikan.
+          4. Item kunci didapatkan atau hilang.
+          5. Perubahan status hubungan yang signifikan.
+        - JANGAN RAGU. Lebih baik menyimpan daripada melupakan detail penting.
+        - Format: [[MEMORY_ADD: Ringkasan Ingatan]] di baris baru paling akhir.
+        - Jika ingatan lama tidak valid, gunakan [[MEMORY_DELETE: NomorIngatan]].
+        - Sistem akan menyembunyikan tag ini, jadi outputkan saja di akhir respon.
     `;
 
     if (storyType === 'character') {
@@ -143,8 +148,6 @@ export async function POST(req) {
          6. KEEP THE LANGUAGE CONSISTENT. Detect language from the description/history and stick to it.
          7. RESPONSE FORMAT: Always use double quotes (") for spoken dialog.
          8. Response Length: Short to Medium (50-150 words). mimic chat pacing.
-         ${memoryInstructions}
-         ${memoryPrompt}
          
          CONTEXT:
          - User Persona: ${userPersona ? `${userPersona.name} - ${userPersona.description}` : "Unknown User"}
@@ -154,6 +157,9 @@ export async function POST(req) {
          - Do NOT use "### CHAPTER". This is a chat, not a book.
          - Do NOT provide "Choices" list at the end. This is a free-form chat.
          - Just reply as the character.
+
+         ${memoryInstructions}
+         ${memoryPrompt}
          `;
     } else {
         // --- ADVENTURE/GAME MASTER MODE ---
@@ -188,9 +194,6 @@ export async function POST(req) {
            - Variasikan struktur kalimat (SPOK). Jangan memulai setiap kalimat dengan "Kamu..." atau nama karakter.
            - Jika sebelumnya sudah dideskripsikan suatu hal, JANGAN deskripsikan ulang dengan kata-kata yang sama. Lanjutkan plotnya.
         7. JANGAN memulai respon dengan merangkum kejadian terakhir (misal: "Setelah...", "Melihat hal itu..."). LANGSUNG ke aksi/konsekuensi berikutnya.
-        ${assetsPrompt}
-        ${memoryInstructions}
-        ${memoryPrompt}
         
         CONTEXT: Saat ini cerita berada di Chapter ${currentChapter || 1}.
         ATURAN BAB/CHAPTER:
@@ -231,7 +234,11 @@ export async function POST(req) {
            2. [Option 2 in English]
            ...
            
-        JANGAN berikan penjelasan di luar cerita.`;
+        JANGAN berikan penjelasan di luar cerita.
+
+        ${assetsPrompt}
+        ${memoryInstructions}
+        ${memoryPrompt}`;
     }
 
     const messages = [

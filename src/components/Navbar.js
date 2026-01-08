@@ -88,6 +88,15 @@ export default function Navbar() {
       }
   }, [activeTab, storyInfo?.id, user]);
 
+  // Refresh story info when Memory tab is active to get latest memories
+  useEffect(() => {
+    if (activeTab === "memory" && storyInfo && user) {
+        getStory(user.uid, storyInfo.id).then(freshStory => {
+             if (freshStory) setStoryInfo(freshStory);
+        }).catch(err => console.error("Failed to refresh memories", err));
+    }
+  }, [activeTab, storyInfo?.id, user]);
+
   const fetchSaves = async () => {
       console.log("fetchSaves called for story:", storyInfo?.id);
       if (!user || !storyInfo) return;
@@ -227,7 +236,63 @@ export default function Navbar() {
   const handleLogout = async () => {
     await logout();
     setIsMenuOpen(false);
-    router.push("/login"); // Redirect to login after logout
+    router.push("/login"); // Redirect to logout
+  };
+
+  const handleDeleteMemory = (idx) => {
+    if (!storyInfo || !user) return;
+    
+    setConfirmation({
+        isOpen: true,
+        type: 'danger',
+        title: 'Forget Memory',
+        message: 'Are you sure you want to remove this memory from your story? This action cannot be undone.',
+        onConfirm: async () => {
+             setConfirmation(prev => ({ ...prev, isLoading: true }));
+             try {
+                // Determine memory to remove
+                const memoryToRemove = storyInfo.memories[idx];
+                const updatedMemories = [...(storyInfo.memories || [])];
+                updatedMemories.splice(idx, 1);
+                
+                // Sync with History: Unmark the specific message
+                // We need to clone history to modify it
+                let updatedHistory = [...(storyInfo.history || [])];
+                let historyChanged = false;
+
+                // Find the turn that has this memory reference
+                updatedHistory = updatedHistory.map(turn => {
+                    if (turn.memoryRef === memoryToRemove) {
+                        historyChanged = true;
+                        return { ...turn, isMemorized: false, memoryRef: null };
+                    }
+                    return turn;
+                });
+                
+                // Update Firestore
+                const updatePayload = { memories: updatedMemories };
+                if (historyChanged) {
+                    updatePayload.history = updatedHistory;
+                }
+                
+                await updateStory(user.uid, storyInfo.id, updatePayload);
+                
+                // Update local state
+                setStoryInfo(prev => ({ 
+                    ...prev, 
+                    memories: updatedMemories,
+                    history: historyChanged ? updatedHistory : prev.history
+                }));
+                
+                setSaveMessage("Memory forgotten.");
+             } catch (err) {
+                 console.error("Failed to delete memory", err);
+                 setSaveMessage("Error deleting memory.");
+             } finally {
+                 setConfirmation({ isOpen: false, isLoading: false, title: "", message: "", onConfirm: null });
+             }
+        }
+    });
   };
 
   // Helper for UI rendering
@@ -645,7 +710,7 @@ export default function Navbar() {
                                 <div className="grid gap-3">
                                     {storyInfo.memories.map((mem, idx) => (
                                         <div key={idx} className="bg-orange-50/50 border border-orange-100 p-3 rounded-xl flex gap-3 group relative">
-                                           <div className="flex-shrink-0 mt-0.5">
+                                           <div className={`flex-shrink-0 mt-0.5 ${idx === 0 ? '' : ''} /* just dummy placeholder to keep linter happy about shrink-0 ID */`}>
                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#FF7B00]">
                                                  <path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a1.875 1.875 0 0 1-1.875-1.875V5.25A3.75 3.75 0 0 0 9 1.5H5.625Z" />
                                                  <path d="M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z" />

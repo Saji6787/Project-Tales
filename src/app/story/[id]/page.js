@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth";
-import { getStory, updateStoryHistory, saveStoryHistory, getPersonas } from "@/lib/firebase/firestore";
+import { getStory, updateStoryHistory, saveStoryHistory, getPersonas, updateStory } from "@/lib/firebase/firestore";
 import ReactMarkdown from "react-markdown";
 
 export default function StoryPage() {
@@ -17,6 +17,17 @@ export default function StoryPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null); // Index of message being edited
   const [editContent, setEditContent] = useState(""); // Content of message being edited
+  
+  // Memory Modal State
+  const [memoryModal, setMemoryModal] = useState({
+      isOpen: false,
+      content: null, // The chat content to summarize
+      targetIndex: null, // Index of the message in history
+      step: 'idle', // 'idle', 'confirm', 'processing', 'success', 'error'
+      result: null, // The generated summary
+      error: null
+  });
+  
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -134,22 +145,31 @@ export default function StoryPage() {
                 characters: story.assets?.characters || [],
                 customs: story.assets?.customs || [],
                 storyType: story.type,
-                storyTitle: story.title
+                storyTitle: story.title,
+                memories: story.memories || []
             })
         });
         
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
+        // Detect if AI added a new memory
+        const prevMemories = story.memories || [];
+        const newMemories = data.memories || [];
+        // Find memory that is in new but not in old
+        const addedMemory = newMemories.find(m => !prevMemories.includes(m));
+
         const aiTurn = {
             role: "ai",
             content: data.story,
             choices: data.choices || [],
-            chapterMetadata: data.chapter || null
+            chapterMetadata: data.chapter || null,
+            isMemorized: !!addedMemory,
+            memoryRef: addedMemory || null
         };
         
         const newHistory = [aiTurn];
-        setStory(prev => ({ ...prev, history: newHistory }));
+        setStory(prev => ({ ...prev, history: newHistory, memories: data.memories || [] }));
         await saveStoryHistory(user.uid, id, newHistory);
     } catch (err) {
         console.error("Failed to start story", err);
@@ -209,17 +229,26 @@ export default function StoryPage() {
       if (data.error) throw new Error(data.error);
 
       // 3. Update UI / Firestore with AI Response
+      
+      // Detect added memory
+      const prevMemories = story.memories || [];
+      const newMemories = data.memories || [];
+      const addedMemory = newMemories.find(m => !prevMemories.includes(m));
+
       const aiTurn = { 
           role: "ai", 
           content: data.story, 
           choices: data.choices || [],
-          chapterMetadata: data.chapter || null
+          chapterMetadata: data.chapter || null,
+          isMemorized: !!addedMemory,
+          memoryRef: addedMemory || null
       };
       
       await updateStoryHistory(user.uid, id, aiTurn);
       setStory(prev => ({ 
           ...prev, 
-          history: [...prev.history, aiTurn] 
+          history: [...prev.history, aiTurn],
+          memories: data.memories || prev.memories || []
       }));
 
     } catch (err) {
@@ -251,22 +280,32 @@ export default function StoryPage() {
                  activePersonaId: story.activePersonaId,
                  locations: story.assets?.locations || [],
                  characters: story.assets?.characters || [],
-                 customs: story.assets?.customs || []
+                 customs: story.assets?.customs || [],
+                 storyType: story.type,
+                 storyTitle: story.title,
+                 storyId: story.id,
+                 memories: story.memories || []
              })
         });
         
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         
+        const prevMemories = story.memories || [];
+        const newMemories = data.memories || [];
+        const addedMemory = newMemories.find(m => !prevMemories.includes(m));
+        
         const aiTurn = {
            role: "ai",
            content: data.story,
            choices: data.choices || [],
-           chapterMetadata: data.chapter || null
+           chapterMetadata: data.chapter || null,
+           isMemorized: !!addedMemory,
+           memoryRef: addedMemory || null
         };
         
         const newHistory = [...story.history, aiTurn];
-        setStory(prev => ({ ...prev, history: newHistory }));
+        setStory(prev => ({ ...prev, history: newHistory, memories: data.memories || prev.memories || [] }));
         await saveStoryHistory(user.uid, id, newHistory);
         
     } catch (err) {
@@ -301,7 +340,11 @@ export default function StoryPage() {
                  activePersonaId: story.activePersonaId,
                  locations: story.assets?.locations || [],
                  characters: story.assets?.characters || [],
-                 customs: story.assets?.customs || []
+                 customs: story.assets?.customs || [],
+                 storyType: story.type,
+                 storyTitle: story.title,
+                 storyId: story.id,
+                 memories: story.memories || []
              })
         });
         
@@ -322,18 +365,27 @@ export default function StoryPage() {
         // However, choices displayed in sidebar usually depend on the LAST message.
         // So we should update the 'active' content and choices to the new one.
         
+        const prevMemories = story.memories || [];
+        const newMemories = data.memories || [];
+        const addedMemory = newMemories.find(m => !prevMemories.includes(m));
+
         const newTurn = {
             ...currentTurn,
             content: data.story,
             choices: data.choices || [], // Update choices to match new story
             versions: newVersions,
             currentVersionIndex: newVersions.length - 1,
-            chapterMetadata: data.chapter || currentTurn.chapterMetadata // preserve or update chapter if regenerated
+            chapterMetadata: data.chapter || currentTurn.chapterMetadata, // preserve or update chapter if regenerated
+            // If new memory added, flag this turn. 
+            // If NOT added, we technically keep previous flag if ...currentTurn had it.
+            // But we should probably prioritize the current generation's status if it adds something?
+            // For now, let's just UPDATE if added.
+            ...(addedMemory ? { isMemorized: true, memoryRef: addedMemory } : {})
         };
         
         updatedHistory[index] = newTurn;
         
-        setStory(prev => ({ ...prev, history: updatedHistory }));
+        setStory(prev => ({ ...prev, history: updatedHistory, memories: data.memories || prev.memories || [] }));
         await saveStoryHistory(user.uid, id, updatedHistory);
         
     } catch (err) {
@@ -444,7 +496,8 @@ export default function StoryPage() {
                   characters: story.assets?.characters || [],
                   customs: story.assets?.customs || [],
                   storyType: story.type,
-                  storyTitle: story.title
+                  storyTitle: story.title,
+                  memories: story.memories || []
               })
           });
           
@@ -460,7 +513,7 @@ export default function StoryPage() {
           };
           
           const finalHistory = [...newHistoryContext, aiTurn];
-          setStory(prev => ({ ...prev, history: finalHistory }));
+          setStory(prev => ({ ...prev, history: finalHistory, memories: data.memories || prev.memories || [] }));
           await saveStoryHistory(user.uid, id, finalHistory);
           
       } catch (err) {
@@ -514,6 +567,163 @@ export default function StoryPage() {
     } finally {
         setIsRefreshing(false);
     }
+  };
+
+  const handleAddToMemory = (content, index) => {
+      const isAlreadyMemorized = story.history[index]?.isMemorized;
+      
+      if (isAlreadyMemorized) {
+          // Open "Forget" modal
+          setMemoryModal({
+              isOpen: true,
+              content: content,
+              targetIndex: index,
+              step: 'delete_confirm', // New step
+              result: null,
+              error: null
+          });
+      } else {
+          // Open "Add" modal
+          setMemoryModal({
+              isOpen: true,
+              content: content,
+              targetIndex: index,
+              step: 'confirm',
+              result: null,
+              error: null
+          });
+      }
+  };
+
+  const proceedMemoryGeneration = async () => {
+    if (!user || !story || !memoryModal.content) return;
+
+    setMemoryModal(prev => ({ ...prev, step: 'processing' }));
+
+    try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/summarize-memory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                token,
+                content: memoryModal.content
+            })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // Fetch fresh story state to ensure we have the latest memories/history
+        // This prevents "resurrecting" deleted memories if local state was stale
+        const freshStory = await getStory(user.uid, story.id);
+        const currentMemories = freshStory?.memories || [];
+        // Use fresh history but fallback to story.history if fetch fails (unlikely if authorized)
+        // Note: Changing history length externally is rare while in this flow, but safer to use fresh.
+        let updatedHistory = [...(freshStory?.history || story.history)];
+
+        const newMemory = data.summary;
+        // Add to story memories
+        const updatedMemories = [...currentMemories, newMemory];
+        
+        // Mark message as memorized
+        if (memoryModal.targetIndex !== null && updatedHistory[memoryModal.targetIndex]) {
+            updatedHistory[memoryModal.targetIndex] = { 
+                ...updatedHistory[memoryModal.targetIndex], 
+                isMemorized: true,
+                memoryRef: newMemory // Store the summary text to link/identify later
+            };
+        }
+
+        // Update local state - merge fresh data with our updates
+        setStory(prev => ({ 
+            ...prev,
+            ...freshStory, // sync any other changes
+            memories: updatedMemories,
+            history: updatedHistory
+        }));
+        
+        // Update Firestore
+        await updateStory(user.uid, story.id, { 
+            memories: updatedMemories,
+            history: updatedHistory
+         });
+        
+        setMemoryModal(prev => ({ 
+            ...prev, 
+            step: 'success', 
+            result: newMemory 
+        }));
+
+    } catch (err) {
+        console.error("Failed to add memory:", err);
+        setMemoryModal(prev => ({ 
+            ...prev, 
+            step: 'error', 
+            error: err.message 
+        }));
+    }
+  };
+
+  const proceedForgetMemory = async () => {
+      if (!user || !story || memoryModal.targetIndex === null) return;
+
+      setMemoryModal(prev => ({ ...prev, step: 'processing' }));
+
+      try {
+        // Fetch fresh story state
+        const freshStory = await getStory(user.uid, story.id);
+        const currentMemories = freshStory?.memories || [];
+        let updatedHistory = [...(freshStory?.history || story.history)];
+        
+        // Note: targetIndex is based on RENDERED history. 
+        // If real history changed length (e.g. parallel session), index might be risky.
+        // But for single session, it should match. Ideally use message ID.
+        // For now, proceed with index assuming single session.
+
+        const targetTurn = updatedHistory[memoryModal.targetIndex];
+        if (!targetTurn) throw new Error("Message not found");
+
+        const memoryText = targetTurn.memoryRef;
+        
+        // Remove from memories array
+        const updatedMemories = currentMemories.filter(m => m !== memoryText);
+
+        // Update history item
+        updatedHistory[memoryModal.targetIndex] = {
+            ...targetTurn,
+            isMemorized: false,
+            memoryRef: null
+        };
+
+        // Update local state - merge
+        setStory(prev => ({ 
+            ...prev, 
+            ...freshStory,
+            memories: updatedMemories,
+            history: updatedHistory
+        }));
+        
+        // Update Firestore
+        await updateStory(user.uid, story.id, { 
+            memories: updatedMemories,
+            history: updatedHistory
+        });
+
+        setMemoryModal({ isOpen: false, content: null, targetIndex: null, step: 'idle', result: null, error: null });
+
+      } catch (err) {
+        console.error("Failed to forget memory:", err);
+        setMemoryModal(prev => ({ 
+            ...prev, 
+            step: 'error', 
+            error: err.message 
+        }));
+      }
+  };
+
+  const closeMemoryModal = () => {
+      setMemoryModal({ isOpen: false, content: null, targetIndex: null, step: 'idle', result: null, error: null });
   };
 
   // Helper to remove markdown markers (**, __) from choices
@@ -803,18 +1013,71 @@ export default function StoryPage() {
                                                 </ReactMarkdown>
                                             </div>
 
+                                            {/* Player Message Star Button - Added inside bubble, visible on hover */}
+                                            {turn.role === 'player' && !processing && (
+                                                <div className="absolute top-2 right-2 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+                                                     <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAddToMemory(turn.content, index);
+                                                        }}
+                                                        title={turn.isMemorized ? "Saved to Memory" : "Add to Memory"}
+                                                        className={`p-1 rounded-full shadow-sm ${
+                                                            turn.isMemorized 
+                                                                ? "bg-[#FF7B00] text-white" 
+                                                                : "bg-white/20 text-white hover:bg-white/40"
+                                                        }`}
+                                                    >
+                                                        {turn.isMemorized ? (
+                                                            // Filled Star
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                                                <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                                                            </svg>
+                                                        ) : (
+                                                            // Outline Star
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             {/* AI Controls (Regenerate & Version) */}
                                             {turn.role === 'ai' && !processing && (
                                                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100/50 transition-opacity duration-200">
-                                                     {/* Versions (Left) */}
-                                                     <div className="flex items-center gap-1 text-xs text-gray-400">
-                                                        {turn.versions && turn.versions.length > 1 && (
-                                                            <>
-                                                                <button onClick={() => handleSwitchVersion(index, 'prev')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&lt;</button>
-                                                                <span>{(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1}/{turn.versions.length}</span>
-                                                                <button onClick={() => handleSwitchVersion(index, 'next')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&gt;</button>
-                                                            </>
-                                                        )}
+                                                     {/* Versions & Memory (Left) */}
+                                                     <div className="flex items-center gap-2">
+                                                         {turn.versions && turn.versions.length > 1 && (
+                                                             <div className="flex items-center gap-1 text-xs text-gray-400">
+                                                                 <button onClick={() => handleSwitchVersion(index, 'prev')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&lt;</button>
+                                                                 <span>{(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1}/{turn.versions.length}</span>
+                                                                 <button onClick={() => handleSwitchVersion(index, 'next')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&gt;</button>
+                                                             </div>
+                                                         )}
+                                                         
+                                                         {/* Memory Star Button */}
+                                                         <button 
+                                                            onClick={() => handleAddToMemory(turn.content, index)}
+                                                            title={turn.isMemorized ? "Saved to Memory" : "Add to Memory"}
+                                                            className={`p-1 rounded transition-colors ${
+                                                                turn.isMemorized 
+                                                                    ? "text-[#FF7B00]" 
+                                                                    : "text-[#FF7B00] hover:bg-orange-50 hover:text-[#e06c00]"
+                                                            }`}
+                                                         >
+                                                             {turn.isMemorized ? (
+                                                                 // Filled Star
+                                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                                    <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                                                                 </svg>
+                                                             ) : (
+                                                                 // Outline Star
+                                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                                                                 </svg>
+                                                             )}
+                                                         </button>
                                                      </div>
 
                                                      {/* Regenerate (Right) */}
@@ -927,10 +1190,91 @@ export default function StoryPage() {
                                     </div>
                                 )}
                                 
+                                {
+                                    /* Player Message Star Button - Added below bubble */
+                                    !processing && (
+                                        <div className="absolute top-full right-0 mt-1 mr-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+                                             <button 
+                                                onClick={() => handleAddToMemory(turn.content, index)}
+                                                title={turn.isMemorized ? "Saved to Memory" : "Add to Memory"}
+                                                className={`p-1 rounded-full shadow-sm ${
+                                                    turn.isMemorized 
+                                                        ? "bg-white text-[#FF7B00] border border-[#FF7B00]" // Visually distinct but clean
+                                                        : "bg-white text-[#FF7B00] hover:bg-orange-50"
+                                                }`}
+                                            >
+                                                {turn.isMemorized ? (
+                                                    // Filled Star
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                                                    </svg>
+                                                ) : (
+                                                    // Outline Star
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )
+                                }
+                                
                                 {/* AI Controls: Reload & Version Nav */}
                                 {turn.role === 'ai' && !processing && (
-                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100/50">
-                                        {/* Only show Regenerate if it's the latest message */}
+                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100/50 justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {/* Version Controls */}
+                                            {turn.versions && turn.versions.length > 1 && (
+                                                <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-0.5">
+                                                    <button 
+                                                        onClick={() => handleSwitchVersion(index, 'prev')}
+                                                        disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0}
+                                                        className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                    <span className="text-xs font-bold text-gray-500 min-w-[30px] text-center">
+                                                        {(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1} / {turn.versions.length}
+                                                    </span>
+                                                    <button 
+                                                        onClick={() => handleSwitchVersion(index, 'next')}
+                                                        disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1}
+                                                        className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Star / Memory Button (Show always for AI) */}
+                                            <button 
+                                                onClick={() => handleAddToMemory(turn.content, index)}
+                                                title={turn.isMemorized ? "Saved to Memory" : "Add to Memory"}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    turn.isMemorized 
+                                                        ? "text-[#FF7B00] bg-orange-50" 
+                                                        : "text-[#FF7B00] hover:text-[#e06c00] hover:bg-orange-50"
+                                                }`}
+                                            >
+                                                {turn.isMemorized ? (
+                                                     // Filled Star
+                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                                        <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                                                     </svg>
+                                                ) : (
+                                                    // Outline Star
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {/* Regenerate Button (Only for latest) */}
                                         {index === story.history.length - 1 && (
                                             <button 
                                                 onClick={() => handleRegenerate(index)}
@@ -941,32 +1285,6 @@ export default function StoryPage() {
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                                                 </svg>
                                             </button>
-                                        )}
-                                        
-                                        {turn.versions && turn.versions.length > 1 && (
-                                            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-0.5">
-                                                <button 
-                                                    onClick={() => handleSwitchVersion(index, 'prev')}
-                                                    disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0}
-                                                    className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                                    <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                                <span className="text-xs font-bold text-gray-500 min-w-[30px] text-center">
-                                                    {(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1} / {turn.versions.length}
-                                                </span>
-                                                <button 
-                                                    onClick={() => handleSwitchVersion(index, 'next')}
-                                                    disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1}
-                                                    className="p-1 text-gray-400 hover:text-[#FF7B00] disabled:opacity-30 disabled:hover:text-gray-400"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                                    <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                            </div>
                                         )}
                                     </div>
                                 )}
@@ -1043,6 +1361,136 @@ export default function StoryPage() {
               {renderChoices(false)}
           </div>
       </div>
+      
+      {/* Memory Modal */}
+      {memoryModal.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-white/20">
+                  {/* Header */}
+                  <div className="bg-[#FF7B00] px-6 py-4 flex items-center justify-between">
+                      <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                            </svg>
+                          {memoryModal.step === 'delete_confirm' ? 'Forget Memory' : 'Add to Memory'}
+                      </h3>
+                      {memoryModal.step !== 'processing' && (
+                          <button onClick={closeMemoryModal} className="text-white/80 hover:text-white transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                      )}
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-6">
+                       {memoryModal.step === 'confirm' && (
+                          <>
+                            <div className="mb-6">
+                                <p className="text-gray-600 mb-2">Are you sure you want to add this chat to the character's long-term memory?</p>
+                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-600 italic max-h-48 overflow-y-auto custom-scrollbar">
+                                    "{memoryModal.content}"
+                                </div>
+                                <p className="text-xs text-orange-500 mt-2 font-medium">The AI will generate a summary of this interaction.</p>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button 
+                                    onClick={closeMemoryModal}
+                                    className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={proceedMemoryGeneration}
+                                    className="px-4 py-2 bg-[#FF7B00] hover:bg-[#e06c00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 transition-all transform hover:scale-105"
+                                >
+                                    Yes, Add It
+                                </button>
+                            </div>
+                          </>
+                       )}
+
+                       {memoryModal.step === 'delete_confirm' && (
+                          <>
+                            <div className="mb-6">
+                                <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                    </svg>
+                                </div>
+                                <h4 className="text-xl font-bold text-center text-gray-800 mb-2">Forget Memory?</h4>
+                                <p className="text-gray-600 text-center mb-6">
+                                    Are you sure you want to remove this memory? The star will be unchecked.
+                                </p>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button 
+                                    onClick={closeMemoryModal}
+                                    className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={proceedForgetMemory}
+                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/30 transition-all transform hover:scale-105"
+                                >
+                                    Yes, Forget It
+                                </button>
+                            </div>
+                          </>
+                       )}
+
+                      {memoryModal.step === 'processing' && (
+                          <div className="py-8 flex flex-col items-center justify-center text-center">
+                              <div className="w-12 h-12 border-4 border-[#FF7B00]/20 border-t-[#FF7B00] rounded-full animate-spin mb-4"></div>
+                              <p className="text-[#FF7B00] font-bold">Generating Summary...</p>
+                              <p className="text-sm text-gray-400">Please wait while the AI processes your memory.</p>
+                          </div>
+                      )}
+
+                      {memoryModal.step === 'success' && (
+                          <div className="text-center">
+                              <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                </svg>
+                              </div>
+                              <h4 className="text-xl font-bold text-gray-800 mb-2">Memory Added!</h4>
+                              <div className="p-4 bg-[#FFF8F0] border border-[#FF7B00]/20 rounded-xl text-left mb-6">
+                                  <span className="text-xs font-bold text-[#FF7B00] uppercase tracking-wider mb-1 block">Summary Saved</span>
+                                  <p className="text-gray-700 font-medium italic">"{memoryModal.result}"</p>
+                              </div>
+                              <button 
+                                  onClick={closeMemoryModal}
+                                  className="w-full px-4 py-3 bg-gray-900 hover:bg-black text-white font-bold rounded-xl transition-colors"
+                              >
+                                  Close
+                              </button>
+                          </div>
+                      )}
+
+                      {memoryModal.step === 'error' && (
+                          <div className="text-center">
+                              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                                </svg>
+                              </div>
+                              <h4 className="text-xl font-bold text-gray-800 mb-2">Error</h4>
+                              <p className="text-gray-600 mb-6">{memoryModal.error}</p>
+                              <button 
+                                  onClick={closeMemoryModal}
+                                  className="w-full px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors"
+                              >
+                                  Close
+                              </button>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
