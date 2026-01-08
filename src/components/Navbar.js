@@ -384,8 +384,11 @@ export default function Navbar() {
           message: "This will definitively clear your current conversation history. You cannot undo this.",
           type: "danger",
           onConfirm: async () => {
-              // Reset history to empty array
-              await updateStory(user.uid, storyInfo.id, { history: [] });
+              // Reset history to empty array AND clear memories
+              await updateStory(user.uid, storyInfo.id, { 
+                  history: [],
+                  memories: [] // Clear memories
+              });
               window.location.reload(); 
           }
       });

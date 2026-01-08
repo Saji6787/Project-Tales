@@ -30,12 +30,23 @@ export default function StoryPage() {
   
   const bottomRef = useRef(null);
 
+  // Real-time synchronization
   useEffect(() => {
     if (user && id) {
-      getStory(user.uid, id).then(s => {
-        setStory(s);
-        setLoading(false);
+      const { doc, onSnapshot } = require("firebase/firestore");
+      const { db } = require("@/lib/firebase/config");
+      
+      const docRef = doc(db, "users", user.uid, "stories", id);
+      const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setStory({ id: docSnap.id, ...docSnap.data() });
+          setLoading(false);
+        }
+      }, (error) => {
+          console.error("Story sync error:", error);
       });
+      
+      return () => unsubscribe();
     }
   }, [user, id]);
 
@@ -128,6 +139,13 @@ export default function StoryPage() {
             return;
         }
 
+        // Self-healing: If history is empty but memories exist, clear memories to ensure fresh start
+        let currentMemories = story.memories || [];
+        if (currentMemories.length > 0) {
+             await updateStory(user.uid, story.id, { memories: [] });
+             currentMemories = [];
+        }
+
         const token = await user.getIdToken();
         const res = await fetch("/api/generate", {
             method: "POST",
@@ -146,7 +164,7 @@ export default function StoryPage() {
                 customs: story.assets?.customs || [],
                 storyType: story.type,
                 storyTitle: story.title,
-                memories: story.memories || []
+                memories: currentMemories
             })
         });
         

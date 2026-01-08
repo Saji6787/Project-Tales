@@ -100,7 +100,8 @@ export const loadSave = async (userId, storyId, saveData) => {
         history: saveData.history,
         storyStyle: saveData.storyStyle || "Normal", // Fallback
         genres: saveData.genres,
-        assets: saveData.assets || {}
+        assets: saveData.assets || {},
+        memories: saveData.memories || [] // Restore memories
         // We do NOT update 'title' or 'initialPrompt' usually as those are story identities,
         // but if the save contains them, it's fine. Main thing is history.
     });
