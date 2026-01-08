@@ -1,14 +1,15 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth";
-import { getStory, updateStoryHistory, saveStoryHistory } from "@/lib/firebase/firestore";
+import { getStory, updateStoryHistory, saveStoryHistory, getPersonas } from "@/lib/firebase/firestore";
 import ReactMarkdown from "react-markdown";
 
 export default function StoryPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const [story, setStory] = useState(null);
+  const [activePersona, setActivePersona] = useState(null); // Add this
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [showChoices, setShowChoices] = useState(true); // Toggle logic
@@ -26,6 +27,16 @@ export default function StoryPage() {
       });
     }
   }, [user, id]);
+
+  // Fetch Active Persona
+  useEffect(() => {
+      if (user && story?.activePersonaId) {
+          getPersonas(user.uid).then(personas => {
+              const found = personas.find(p => p.id === story.activePersonaId);
+              if (found) setActivePersona(found);
+          });
+      }
+  }, [user, story?.activePersonaId]);
 
   // Scroll logic
   const isInitialLoad = useRef(true);
@@ -56,17 +67,74 @@ export default function StoryPage() {
     if (processing || !user || !story) return;
     setProcessing(true);
     try {
+        let replacementName = "User"; // Default fallback
+        
+        // Fetch persona for replacement (Active or Default)
+        try {
+            // Using getPersonas to find active or default one. 
+            const { getPersonas } = await import("@/lib/firebase/firestore");
+            const personas = await getPersonas(user.uid);
+            
+            let targetPersona = null;
+            if (story.activePersonaId) {
+                targetPersona = personas.find(p => p.id === story.activePersonaId);
+            }
+            
+            // Fallback to default if active not set or not found
+            if (!targetPersona) {
+                targetPersona = personas.find(p => p.isDefault);
+            }
+
+            if (targetPersona) {
+                replacementName = targetPersona.name;
+            }
+        } catch (e) {
+            console.warn("Failed to fetch persona for replacement", e);
+        }
+
+        // Check if character has a pre-defined first message
+        if (story.firstMessage && story.firstMessage.trim()) {
+             let processedMessage = story.firstMessage;
+             
+             // Dynamic Replacement of [User], {User}, etc.
+             const pattern = /\[User\]|\{User\}|\(User\)|\{Player\}|\[You\]|\[Player\]/gi;
+             processedMessage = processedMessage.replace(pattern, replacementName);
+
+             const aiTurn = {
+                role: "ai",
+                content: processedMessage,
+                choices: [], // We'll assume no choices for a static greeting, or user can reply
+                chapterMetadata: { number: 1, title: "Prologue" } // Default metadata
+            };
+            
+            const newHistory = [aiTurn];
+            setStory(prev => ({ ...prev, history: newHistory }));
+            await saveStoryHistory(user.uid, id, newHistory);
+            
+            // Optionally: Generating choices for this first message would be good, 
+            // but for now let's just let the user reply to the greeting.
+            setProcessing(false);
+            return;
+        }
+
         const token = await user.getIdToken();
         const res = await fetch("/api/generate", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 token,
                 history: [], // Empty history
                 initialPrompt: story.initialPrompt,
                 genres: story.genres,
                 style: story.storyStyle,
-                currentChapter: 1
+                style: story.storyStyle,
+                currentChapter: 1,
+                activePersonaId: story.activePersonaId,
+                locations: story.assets?.locations || [],
+                characters: story.assets?.characters || [],
+                customs: story.assets?.customs || [],
+                storyType: story.type,
+                storyTitle: story.title
             })
         });
         
@@ -125,7 +193,15 @@ export default function StoryPage() {
            history: newHistory,
            initialPrompt: story.initialPrompt,
            style: story.storyStyle, // Pass style 
-           currentChapter: currentChapter
+           currentChapter: currentChapter,
+           activePersonaId: story.activePersonaId,
+           locations: story.assets?.locations || [],
+           characters: story.assets?.characters || [],
+           customs: story.assets?.customs || [],
+           storyType: story.type,
+           storyTitle: story.title,
+           storyId: story.id,
+           memories: story.memories || []
         }),
       });
       
@@ -171,7 +247,11 @@ export default function StoryPage() {
                  initialPrompt: story.initialPrompt,
                  genres: story.genres,
                  style: story.storyStyle,
-                 currentChapter: currentChapter
+                 currentChapter: currentChapter,
+                 activePersonaId: story.activePersonaId,
+                 locations: story.assets?.locations || [],
+                 characters: story.assets?.characters || [],
+                 customs: story.assets?.customs || []
              })
         });
         
@@ -217,7 +297,11 @@ export default function StoryPage() {
                  initialPrompt: story.initialPrompt,
                  genres: story.genres,
                  style: story.storyStyle, // Pass style
-                 currentChapter: currentChapter
+                 currentChapter: currentChapter,
+                 activePersonaId: story.activePersonaId,
+                 locations: story.assets?.locations || [],
+                 characters: story.assets?.characters || [],
+                 customs: story.assets?.customs || []
              })
         });
         
@@ -350,7 +434,17 @@ export default function StoryPage() {
                   initialPrompt: story.initialPrompt,
                   genres: story.genres,
                   style: story.storyStyle, // Pass style
-                  currentChapter: currentChapter
+                  currentChapter: currentChapter,
+                  currentChapter: currentChapter,
+                  activePersonaId: story.activePersonaId,
+                  locations: story.assets?.locations || [],
+                  characters: story.assets?.characters || [],
+                  activePersonaId: story.activePersonaId,
+                  locations: story.assets?.locations || [],
+                  characters: story.assets?.characters || [],
+                  customs: story.assets?.customs || [],
+                  storyType: story.type,
+                  storyTitle: story.title
               })
           });
           
@@ -391,7 +485,13 @@ export default function StoryPage() {
                 history: story.history,
                 initialPrompt: story.initialPrompt,
                 genres: story.genres,
-                style: story.storyStyle // Pass style
+                style: story.storyStyle, // Pass style
+                activePersonaId: story.activePersonaId,
+                locations: story.assets?.locations || [],
+                characters: story.assets?.characters || [],
+                customs: story.assets?.customs || [],
+                storyType: story.type,
+                storyTitle: story.title
             })
         });
         const data = await res.json();
@@ -435,6 +535,19 @@ export default function StoryPage() {
       cleaned = cleaned.slice(1, -1);
     }
     return cleaned.replace(/\n/g, '\n\n');
+  };
+
+  // Helper component to highlight dialogs
+  const HighlightedText = ({ children, className }) => {
+      if (typeof children !== 'string') return children;
+      
+      const parts = children.split(/(".*?")/g);
+      return parts.map((part, index) => {
+          if (part.startsWith('"') && part.endsWith('"')) {
+              return <span key={index} className={`${className || 'text-[#FF7B00]'} font-medium`}>{part}</span>;
+          }
+          return part;
+      });
   };
 
   // Helper to render Choices Content
@@ -493,7 +606,7 @@ export default function StoryPage() {
               {!processing && (
                   <div className={`${isMobile ? 'pt-2 border-t border-gray-200 mt-2' : 'pt-4 border-t border-white/20 mt-4'}`}>
                      <label className={`block text-xs font-bold ${isMobile ? 'mb-1' : 'mb-2'} uppercase tracking-wide ${isMobile ? 'text-gray-500' : 'text-white/70'}`}>Custom Choice</label>
-                     <div className={`flex items-end gap-2 p-2 rounded-xl border focus-within:border-opacity-100 transition-all ${
+                     <div className={`flex items-center gap-2 p-2 rounded-xl border focus-within:border-opacity-100 transition-all ${
                          isMobile 
                          ? 'bg-white border-gray-300 focus-within:border-[#FF7B00]' 
                          : 'bg-white/10 border-white/20 focus-within:bg-white/20 focus-within:border-white/50'
@@ -518,7 +631,7 @@ export default function StoryPage() {
                                  }
                              }}
                              disabled={!customChoice.trim() || processing}
-                             className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg ${isMobile ? 'bg-[#FF7B00] text-white' : 'bg-white text-[#FF7B00] hover:bg-gray-100'}`}
+                             className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg ${isMobile ? 'bg-[#FF7B00] text-white' : 'bg-white text-[#5a2e0c] hover:bg-gray-100'}`}
                          >
                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                                  <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
@@ -550,8 +663,8 @@ export default function StoryPage() {
               {story.coverImage ? (
                   <>
                       <div 
-                          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                          style={{ backgroundImage: `url(${story.coverImage})` }}
+                          className="absolute inset-0 bg-cover bg-no-repeat transition-transform duration-700 group-hover:scale-105"
+                          style={{ backgroundImage: `url(${story.coverImage})`, backgroundPosition: 'center 30%' }}
                       />
                       
                       {/* Edge Fading (Blur effect) - Matching Page Background #FCF5EF */}
@@ -612,6 +725,19 @@ export default function StoryPage() {
                             ref={index === story.history.length - 1 ? lastMessageRef : null}
                             className={`flex gap-4 mb-6 ${turn.role === 'player' ? 'flex-row-reverse' : 'flex-row'}`}
                         >
+                            {/* Avatar (User) */}
+                            {turn.role === 'player' && (
+                                <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-[#FF7B00] shadow-sm bg-white">
+                                    {activePersona?.photoUrl ? (
+                                        <img src={activePersona.photoUrl} alt="User" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500 font-bold text-lg">
+                                            U
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Avatar (AI Only) */}
                             {turn.role === 'ai' && (
                                 <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-white shadow-sm bg-white">
@@ -633,7 +759,7 @@ export default function StoryPage() {
                                 )}
 
                                 {/* Message Bubble/Card */}
-                                <div className={`p-4 md:p-5 text-base leading-relaxed shadow-sm relative group/bubble ${
+                                <div className={`p-4 md:p-5 text-base shadow-sm relative group/bubble flex flex-col justify-center ${
                                     turn.role === 'player' 
                                         ? 'bg-[#FF7B00] text-white rounded-2xl rounded-tr-none' 
                                         : 'bg-white text-black rounded-2xl rounded-tl-none border border-gray-100'
@@ -657,10 +783,20 @@ export default function StoryPage() {
                                          </div>
                                      ) : (
                                         <>
-                                            <div className="prose prose-sm max-w-none prose-p:mb-2 last:prose-p:mb-0">
+                                            <div className="prose prose-sm max-w-none prose-p:mb-2 last:prose-p:mb-0 [&>p]:mt-0">
                                                 <ReactMarkdown
                                                     components={{
-                                                        p: ({node, ...props}) => <p className={turn.role === 'player' ? 'text-white' : 'text-black'} {...props} />
+                                                        p: ({node, children, ...props}) => (
+                                                            <p className={turn.role === 'player' ? 'text-[#5a2e0c]' : 'text-black'} {...props}>
+                                                                {React.Children.map(children, child =>  
+                                                                    typeof child === 'string' ? (
+                                                                        <HighlightedText className={turn.role === 'player' ? 'text-white' : 'text-[#FF7B00]'}>
+                                                                            {child}
+                                                                        </HighlightedText>
+                                                                    ) : child
+                                                                )}
+                                                            </p>
+                                                        )
                                                     }}
                                                 >
                                                     {formatContent(turn.content)}
@@ -669,18 +805,23 @@ export default function StoryPage() {
 
                                             {/* AI Controls (Regenerate & Version) */}
                                             {turn.role === 'ai' && !processing && (
-                                                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/50 opacity-0 group-hover/bubble:opacity-100 transition-opacity duration-200">
+                                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100/50 transition-opacity duration-200">
+                                                     {/* Versions (Left) */}
+                                                     <div className="flex items-center gap-1 text-xs text-gray-400">
+                                                        {turn.versions && turn.versions.length > 1 && (
+                                                            <>
+                                                                <button onClick={() => handleSwitchVersion(index, 'prev')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&lt;</button>
+                                                                <span>{(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1}/{turn.versions.length}</span>
+                                                                <button onClick={() => handleSwitchVersion(index, 'next')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1} className="hover:text-[#FF7B00] disabled:opacity-30 px-1 py-0.5">&gt;</button>
+                                                            </>
+                                                        )}
+                                                     </div>
+
+                                                     {/* Regenerate (Right) */}
                                                      {index === story.history.length - 1 && (
-                                                        <button onClick={() => handleRegenerate(index)} title="Regenerate" className="p-1 text-gray-400 hover:text-[#FF7B00]">
+                                                        <button onClick={() => handleRegenerate(index)} title="Regenerate" className="p-1 text-gray-400 hover:text-[#FF7B00] transition disabled:opacity-30">
                                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                                                         </button>
-                                                     )}
-                                                     {turn.versions && turn.versions.length > 1 && (
-                                                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                                                            <button onClick={() => handleSwitchVersion(index, 'prev')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) === 0} className="hover:text-[#FF7B00] disabled:opacity-30">&lt;</button>
-                                                            <span>{(turn.currentVersionIndex ?? (turn.versions.length - 1)) + 1}/{turn.versions.length}</span>
-                                                            <button onClick={() => handleSwitchVersion(index, 'next')} disabled={(turn.currentVersionIndex ?? (turn.versions.length - 1)) >= turn.versions.length - 1} className="hover:text-[#FF7B00] disabled:opacity-30">&gt;</button>
-                                                        </div>
                                                      )}
                                                 </div>
                                             )}
@@ -691,7 +832,7 @@ export default function StoryPage() {
                                      {turn.role === 'player' && !processing && index === lastPlayerIndex && !editingIndex && (
                                          <button 
                                             onClick={() => handleEditStart(index, turn.content)} 
-                                            className="absolute -left-8 top-2 text-gray-300 hover:text-[#FF7B00] opacity-0 group-hover/bubble:opacity-100 transition-opacity"
+                                            className="absolute -left-8 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#FF7B00]"
                                             title="Edit"
                                          >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>

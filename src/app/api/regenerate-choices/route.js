@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server';
 import { ChatMistralAI } from "@langchain/mistralai";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
-import { adminAuth } from '@/lib/firebase/admin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
 
 export async function POST(req) {
   try {
-    const { history, initialPrompt, genres, token } = await req.json();
+    const { history, initialPrompt, genres, token, activePersonaId } = await req.json();
 
     // 1. Validate Auth
+    let userId = null;
     if (token && adminAuth) {
         try {
-            await adminAuth.verifyIdToken(token);
+            const decodedToken = await adminAuth.verifyIdToken(token);
+            userId = decodedToken.uid;
         } catch (e) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -20,6 +22,32 @@ export async function POST(req) {
 
     if (!process.env.MISTRAL_API_KEY) {
         return NextResponse.json({ error: "Mistral API Key missing" }, { status: 500 });
+    }
+
+    // Fetch User Persona (Active or Default)
+    let userPersona = null;
+    if (userId && adminDb) {
+        try {
+            const personasRef = adminDb.collection("users").doc(userId).collection("personas");
+            
+            if (activePersonaId) {
+                const docSnap = await personasRef.doc(activePersonaId).get();
+                if (docSnap.exists) userPersona = docSnap.data();
+            }
+
+            if (!userPersona) {
+                const snapshot = await personasRef.where("isDefault", "==", true).limit(1).get();
+                if (!snapshot.empty) userPersona = snapshot.docs[0].data();
+            }
+        } catch (e) {
+            console.warn("Failed to fetch user persona", e);
+        }
+    }
+
+    let personaPrompt = "";
+    if (userPersona) {
+        personaPrompt = `\n        PLAYER PERSONA: ${userPersona.name} - ${userPersona.description || "No description"}. 
+        Keep choices consistent with this persona's capabilities/personality.`;
     }
 
     // 2. Setup Mistral
@@ -33,6 +61,7 @@ export async function POST(req) {
     const messages = [
         new SystemMessage(`You are a Game Master.
         Task: Provide EXACTLY 3 NEW and DIFFERENT choices for the player based on the story history.
+        ${personaPrompt}
         
         Important:
         - Output ONLY the "Choices" section.

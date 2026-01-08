@@ -5,6 +5,8 @@ import { createStory, updateStoryHistory } from "@/lib/firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import Cropper from 'react-easy-crop';
+
 export default function CreateCharacterPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -15,8 +17,14 @@ export default function CreateCharacterPage() {
   const [genres, setGenres] = useState([]); // Array of selected genres
   
   // Cover Image State
-  const [coverImage, setCoverImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [coverImage, setCoverImage] = useState(null); // Final base64
+  const [originalImage, setOriginalImage] = useState(null); // Source image (preserved for re-editing)
+  const [tempImage, setTempImage] = useState(null); // Active image in cropper
+  const [isCropping, setIsCropping] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const fileInputRef = useRef(null); // Ref for file input
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEnhancingDesc, setIsEnhancingDesc] = useState(false);
@@ -43,59 +51,218 @@ export default function CreateCharacterPage() {
     );
   };
 
-  // Helper: Compress Image to Base64 (Max 800px width, 0.7 quality)
-  const compressImage = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Resize to max 800px width
-                    const scaleSize = MAX_WIDTH / img.width;
-                    
-                    if (img.width > MAX_WIDTH) {
-                        canvas.width = MAX_WIDTH;
-                        canvas.height = img.height * scaleSize;
-                    } else {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                    }
+  const onCropComplete = (croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
 
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    // Compress to JPEG with 0.7 quality to keep under Firestore 1MB limit
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    resolve(dataUrl);
-                };
-                img.onerror = (error) => reject(error);
-            };
-            reader.onerror = (error) => reject(error);
+    const createImage = (url) =>
+        new Promise((resolve, reject) => {
+            const image = new Image();
+            image.addEventListener("load", () => resolve(image));
+            image.addEventListener("error", (error) => reject(error));
+            image.setAttribute("crossOrigin", "anonymous");
+            image.src = url;
         });
+
+    const getCroppedImg = async (imageSrc, pixelCrop) => {
+        const image = await createImage(imageSrc);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+            return null;
+        }
+
+        // set canvas size to match the bounding box
+        canvas.width = pixelCrop.width;
+        canvas.height = pixelCrop.height;
+
+        // draw image
+        ctx.drawImage(
+            image,
+            pixelCrop.x,
+            pixelCrop.y,
+            pixelCrop.width,
+            pixelCrop.height,
+            0,
+            0,
+            pixelCrop.width,
+            pixelCrop.height
+        );
+
+        // As Base64 string (JPEG, 0.9 quality)
+        return canvas.toDataURL('image/jpeg', 0.9);
     };
+
+    const handleCropSave = async () => {
+        if (!tempImage || !croppedAreaPixels) return;
+        try {
+            const croppedImage = await getCroppedImg(tempImage, croppedAreaPixels);
+            setCoverImage(croppedImage);
+            // Don't clear tempImage/originalImage here so we can re-edit later
+            setIsCropping(false);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to crop image");
+        }
+    };
+
 
   // Handle Image Selection
   const handleImageChange = async (e) => {
       const file = e.target.files[0];
       if (file) {
-          if (file.size > 5 * 1024 * 1024) { // 5MB limit check before compression
+          if (file.size > 5 * 1024 * 1024) { // 5MB limit
               alert("Image size should be less than 5MB");
               return;
           }
-          
-          try {
-            const compressedBase64 = await compressImage(file);
-            setCoverImage(compressedBase64); // Save the Base64 string directly
-            setPreviewUrl(compressedBase64);
-          } catch (error) {
-              console.error("Error compressing image:", error);
-              alert("Failed to process image.");
-          }
+           const reader = new FileReader();
+           reader.addEventListener("load", () => {
+               const result = reader.result?.toString() || "";
+               setOriginalImage(result);
+               setTempImage(result);
+               setIsCropping(true);
+           });
+           reader.readAsDataURL(file);
       }
   };
+  
+  const openEditModal = () => {
+      // Logic: If we have an original source, use it. Otherwise use the cropped one (fallback).
+      // If neither, trigger upload? No, button says "Edit Image" only if image exists.
+      // Actually per requirement: "Edit Image" -> Modal.
+      
+      if (originalImage) {
+          setTempImage(originalImage);
+          setIsCropping(true);
+      } else if (coverImage) {
+           setTempImage(coverImage);
+           setIsCropping(true);
+      } else {
+          // No image yet, trigger upload
+          fileInputRef.current?.click();
+      }
+  };
+
+// ... inside render ...
+
+// [Lines 290-320 Replacement]
+            <div>
+               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Cover Image (Optional)</label>
+               <div className="flex items-center gap-4">
+                   {coverImage && (
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-md border border-gray-200 shrink-0">
+                            <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                        </div>
+                    )}
+                    
+                    <button
+                        type="button" 
+                        onClick={openEditModal}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white text-sm font-medium text-gray-600"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            {coverImage ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                            ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                            )}
+                        </svg>
+                        {coverImage ? "Edit Image" : "Upload Cover"}
+                    </button>
+                    
+                    {/* Hidden Input */}
+                    <input 
+                       ref={fileInputRef}
+                       type="file" 
+                       accept="image/*" 
+                       onChange={handleImageChange}
+                       className="hidden"
+                    />
+               </div>
+            </div>
+
+// [Bottom Modal Replacement]
+      {/* Edit Image Modal */}
+      {isCropping && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+              <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                  <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                    <h3 className="font-bold text-gray-800 text-lg">Edit Image</h3>
+                    <button onClick={() => setIsCropping(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-500">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="relative flex-1 bg-black min-h-[300px]">
+                       {tempImage ? (
+                           <Cropper
+                               image={tempImage}
+                               crop={crop}
+                               zoom={zoom}
+                               aspect={1} // 1:1 Aspect Ratio
+                               onCropChange={setCrop}
+                               onCropComplete={onCropComplete}
+                               onZoomChange={setZoom}
+                           />
+                       ) : (
+                           <div className="absolute inset-0 flex items-center justify-center text-white/50">
+                               No Image Loaded
+                           </div>
+                       )}
+                  </div>
+                  
+                  <div className="p-6 bg-white border-t border-gray-100 space-y-4">
+                       {/* Zoom Control */}
+                       <div>
+                           <div className="flex justify-between mb-2">
+                               <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Zoom</label>
+                               <span className="text-xs font-bold text-gray-400">{zoom.toFixed(1)}x</span>
+                           </div>
+                           <input
+                             type="range"
+                             value={zoom}
+                             min={1}
+                             max={3}
+                             step={0.1}
+                             onChange={(e) => setZoom(Number(e.target.value))}
+                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#FF7B00]"
+                           />
+                       </div>
+
+                       {/* Action Buttons */}
+                       <div className="flex flex-col gap-3 pt-2">
+                           <button
+                               onClick={handleCropSave}
+                               className="w-full bg-[#FF7B00] text-white py-3 rounded-xl font-bold hover:bg-[#e06c00] transition active:scale-[0.98]"
+                            >
+                               Save Changes
+                           </button>
+                           
+                           <div className="flex gap-3">
+                               <button
+                                   onClick={() => fileInputRef.current?.click()}
+                                   className="flex-1 py-3 rounded-xl font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                                >
+                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                                   </svg>
+                                   Upload Image
+                               </button>
+                               <button
+                                   onClick={() => setIsCropping(false)}
+                                   className="flex-1 py-3 rounded-xl font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition"
+                                >
+                                   Cancel
+                               </button>
+                           </div>
+                       </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
   const handleEnhance = async (type) => {
     const text = type === "character" ? description : firstMessage;
@@ -257,40 +424,43 @@ export default function CreateCharacterPage() {
            </div>
 
            {/* Cover Image Upload */}
-           <div>
-              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Cover Image (Optional)</label>
-              <div className="flex items-center gap-4">
-                  {previewUrl && (
-                      <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-md border border-gray-200">
-                          <img src={previewUrl} alt="Cover Preview" className="w-full h-full object-cover" />
-                      </div>
-                  )}
-                  <label className="cursor-pointer flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white text-sm font-medium text-gray-600">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                      </svg>
-                      {coverImage ? "Change Image" : "Upload Cover"}
-                      <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handleImageChange}
-                          className="hidden"
-                      />
-                  </label>
-                  {coverImage && (
-                      <button 
-                        type="button"
-                        onClick={() => { setCoverImage(null); setPreviewUrl(null); }}
-                        className="text-xs text-red-500 font-bold hover:underline"
-                      >
-                          Remove
-                      </button>
-                  )}
-              </div>
-           </div>
-
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Genres / Tags (Select at least one)</label>
+               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Cover Image (Optional)</label>
+               <div className="flex items-center gap-4">
+                   {coverImage && (
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-md border border-gray-200 shrink-0">
+                            <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                        </div>
+                    )}
+                    
+                    <button
+                        type="button" 
+                        onClick={openEditModal}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition bg-white text-sm font-medium text-gray-600"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            {coverImage ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                            ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                            )}
+                        </svg>
+                        {coverImage ? "Edit Image" : "Upload Cover"}
+                    </button>
+                    
+                    {/* Hidden Input */}
+                    <input 
+                       ref={fileInputRef}
+                       type="file" 
+                       accept="image/*" 
+                       onChange={handleImageChange}
+                       className="hidden"
+                    />
+               </div>
+            </div>
+
+             <div>
+               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Genres / Tags (Select at least one)</label>
               
               {/* Desktop View: Full List */}
               <div className="hidden md:flex flex-wrap gap-2">
@@ -495,6 +665,87 @@ export default function CreateCharacterPage() {
                 </div>
              </div>
         </div>
+      )}
+
+      {/* Edit Image Modal */}
+      {isCropping && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+              <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                  <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                    <h3 className="font-bold text-gray-800 text-lg">Edit Image</h3>
+                    <button onClick={() => setIsCropping(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-500">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="relative flex-1 bg-black min-h-[300px]">
+                       {tempImage ? (
+                           <Cropper
+                               image={tempImage}
+                               crop={crop}
+                               zoom={zoom}
+                               aspect={1} // 1:1 Aspect Ratio
+                               onCropChange={setCrop}
+                               onCropComplete={onCropComplete}
+                               onZoomChange={setZoom}
+                           />
+                       ) : (
+                           <div className="absolute inset-0 flex items-center justify-center text-white/50">
+                               No Image Loaded
+                           </div>
+                       )}
+                  </div>
+                  
+                  <div className="p-6 bg-white border-t border-gray-100 space-y-4">
+                       {/* Zoom Control */}
+                       <div>
+                           <div className="flex justify-between mb-2">
+                               <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Zoom</label>
+                               <span className="text-xs font-bold text-gray-400">{zoom.toFixed(1)}x</span>
+                           </div>
+                           <input
+                             type="range"
+                             value={zoom}
+                             min={1}
+                             max={3}
+                             step={0.1}
+                             onChange={(e) => setZoom(Number(e.target.value))}
+                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#FF7B00]"
+                           />
+                       </div>
+
+                       {/* Action Buttons */}
+                       <div className="flex flex-col gap-3 pt-2">
+                           <button
+                               onClick={handleCropSave}
+                               className="w-full bg-[#FF7B00] text-white py-3 rounded-xl font-bold hover:bg-[#e06c00] transition active:scale-[0.98]"
+                            >
+                               Save Changes
+                           </button>
+                           
+                           <div className="flex gap-3">
+                               <button
+                                   onClick={() => fileInputRef.current?.click()}
+                                   className="flex-1 py-3 rounded-xl font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                                >
+                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                                   </svg>
+                                   Upload Image
+                               </button>
+                               <button
+                                   onClick={() => setIsCropping(false)}
+                                   className="flex-1 py-3 rounded-xl font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition"
+                                >
+                                   Cancel
+                               </button>
+                           </div>
+                       </div>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );

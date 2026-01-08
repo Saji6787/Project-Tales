@@ -310,6 +310,22 @@ export default function Navbar() {
     });
   };
 
+  const handleNewChat = () => {
+      if (!user || !storyInfo) return;
+      
+      setConfirmation({
+          isOpen: true,
+          title: "Start New Chat?",
+          message: "This will definitively clear your current conversation history. You cannot undo this.",
+          type: "danger",
+          onConfirm: async () => {
+              // Reset history to empty array
+              await updateStory(user.uid, storyInfo.id, { history: [] });
+              window.location.reload(); 
+          }
+      });
+  };
+
   if (pathname === "/login") return null;
 
   return (
@@ -444,6 +460,12 @@ export default function Navbar() {
                          >
                             Persona
                          </button>
+                         <button 
+                            onClick={() => setActiveTab("memory")}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "memory" ? "bg-white text-[#FF7B00] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                         >
+                            Memory
+                         </button>
                      </div>
                  </div>
 
@@ -519,6 +541,22 @@ export default function Navbar() {
                                     )}
                                 </>
                             )}
+                            
+                            {/* New Chat Button at the visual bottom right of the scrollable content or fixed footer? 
+                                User asked for "in the bottom right of the modal".
+                                Since this is scrollable content, maybe below all content?
+                            */}
+                            <div className="flex justify-end pt-4 mt-6 border-t border-gray-100">
+                                <button 
+                                    onClick={handleNewChat}
+                                    className="px-5 py-2.5 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-[#FF7B00] hover:text-white transition flex items-center gap-2 text-sm"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                    </svg>
+                                    New Chat
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -593,6 +631,43 @@ export default function Navbar() {
                                 </div>
                             )}
                          </div>
+                    )}
+
+                    {/* MEMORY TAB */}
+                    {activeTab === "memory" && (
+                        <div className="space-y-4 pt-2">
+                            {(!storyInfo.memories || storyInfo.memories.length === 0) ? (
+                                <div className="text-center py-10 text-gray-400">
+                                    <p className="mb-2 italic">"I don't remember anything specific yet..."</p>
+                                    <p className="text-xs">The AI will automatically add memories here as you chat.</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {storyInfo.memories.map((mem, idx) => (
+                                        <div key={idx} className="bg-orange-50/50 border border-orange-100 p-3 rounded-xl flex gap-3 group relative">
+                                           <div className="flex-shrink-0 mt-0.5">
+                                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#FF7B00]">
+                                                 <path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a1.875 1.875 0 0 1-1.875-1.875V5.25A3.75 3.75 0 0 0 9 1.5H5.625Z" />
+                                                 <path d="M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z" />
+                                               </svg>
+                                           </div>
+                                           <div className="flex-1 text-sm text-gray-700 leading-relaxed">
+                                               {mem}
+                                           </div>
+                                           <button 
+                                               onClick={() => handleDeleteMemory(idx)}
+                                               className="absolute top-2 right-2 p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all bg-white rounded-full shadow-sm"
+                                               title="Forget this memory"
+                                           >
+                                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                               </svg>
+                                           </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
 
                 </div>
